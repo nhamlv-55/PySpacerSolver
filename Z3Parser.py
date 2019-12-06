@@ -7,8 +7,24 @@ class Z3Parser(SmtLibParser):
     
     def _cmd_check_sat(self, current, tokens):
         args = self.parse_check_sat_expr_list(tokens, current)
-#         self.consume_closing(tokens, current)
         return SmtLibCommand(current, args)
+    def _cmd_declare_fun(self, current, tokens):
+        """(declare-fun <symbol> (<sort>*) <sort>)"""
+        var = self.parse_atom(tokens, current)
+        params = self.parse_params(tokens, current)
+        typename = self.parse_type(tokens, current)
+        self.consume_closing(tokens, current)
+
+        if params:
+            typename = self.env.type_manager.FunctionType(typename, params)
+
+        v = self._get_var(var, typename)
+        if v.symbol_type().is_function_type():
+            self.cache.bind(var, \
+                    functools.partial(self._function_call_helper, v))
+        else:
+            self.cache.bind(var, v)
+        return SmtLibCommand(current, [v, var, params, typename])
     
     def get_script(self, script):
         """
