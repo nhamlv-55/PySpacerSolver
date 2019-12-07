@@ -14,12 +14,13 @@ converter = pyz3.Z3Converter(parser.env, z3.get_ctx(None))
 mgr = parser.env.formula_manager
 class PySpacerSolver:
     def __init__(self):
-        self.solver = z3.SolverFor('LRA')
+        self.solver = None
         self._vars = {}
         self._pre2post = {}
         self._post2pre = {}
-        self._other_ass = [] #list of z3 expr
-        self._level_ass = {} #dict of z3 expr
+        self._solver = None #vsolver variable
+        self._other_ass = [] #list of pysmt formula (Fnode)
+        self._level_ass = {} #dict of z3 pysmt formula (Fnode)
         self._proxy_ass = {}
         self._chks = []
 
@@ -45,6 +46,9 @@ class PySpacerSolver:
             self._vars[post] = zvar_post
             self._pre2post[zvar_pre] = zvar_post
             self._post2pre[zvar_post] = zvar_pre
+        elif "vsolver" in var_name:
+            self._vars[var_name] = z3.Const(var_name, converter._type_to_z3(sort))
+            self._solver = v
         else:
             self._vars[var_name] = z3.Const(var_name, converter._type_to_z3(sort))
 
@@ -54,10 +58,10 @@ class PySpacerSolver:
     def add_assert(self, command):
         if self._assert_contains(command, "proxy"):
             head, tail = self._mk_assert_of(command, "proxy")
-            self._proxy_ass[head] = tail
+            self._proxy_ass[str(head)] = {"head":head, "tail": tail, "cmd": command.args[0]}
         elif self._assert_contains(command, "level"):
             head, tail = self._mk_assert_of(command, "level")
-            self._level_ass[head] = tail
+            self._level_ass[str(head)] = {"head": head, "tail":tail, "cmd": command.args[0]}
         else:
             self._other_ass.append(command.args[0])
 
@@ -97,7 +101,16 @@ class PySpacerSolver:
         tail = mgr.create_node(node_type = command.args[0].node_type(), args = tuple(tail),payload = None)
         return head, tail
     
-    def check(self):
+    def check(self, levels = None, lemma = None):
+        self.solver = z3.Solver()
+
+        # add constraints to solver
+        for l in levels:
+            solver.add(converter.convert(self._level_ass[l]))
+
+        for lit in lemma:
+            solver.add(lit)
+
         # run solver
         res = self.solver.check()
         # extract model or proof
@@ -129,6 +142,8 @@ class PySpacerSolver:
         print("VAR:")
         for k, v in self._vars.items():
             print(k, v)
+        print("SOLVER:")
+        print(self._solver)
         print("PROXIES:")
         for k, v in self._proxy_ass.items():
             print(k, "->", v)
@@ -141,7 +156,7 @@ class PySpacerSolver:
         print("CHECK-SAT:")
         for c in self._chks:
             print(c)
-filename = "/home/nv3le/workspace/saturation-visualization/deepSpacer/pobvis/app/pool_solver_vsolver#0_1.smt2"
+filename = "/home/nv3le/workspace/saturation-visualization/deepSpacer/pobvis/app/pool_solver_vsolver#0_12.smt2"
 
 if __name__=="__main__":
     
