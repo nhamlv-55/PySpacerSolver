@@ -8,22 +8,25 @@ from pysmt.fnode import FNode, FNodeContent
 from Z3Parser import Z3Parser
 z3.set_param(proof = True)
 z3.set_param(model = True)
-parser = Z3Parser()
+class ExprDb:
+    def __init__(self, filename):
+        self.filename = filename
+        self.parser = Z3Parser()
 
-converter = pyz3.Z3Converter(parser.env, z3.get_ctx(None))
-mgr = parser.env.formula_manager
-class PySpacerSolver:
-    def __init__(self):
-        self.solver = None
+        self.converter = pyz3.Z3Converter(self.parser.env, z3.get_ctx(None))
+        self.mgr = self.parser.env.formula_manager
         self._vars = {}
         self._pre2post = {}
         self._post2pre = {}
-        self._solver = None #vsolver variable
+        self._solver_var = None #vsolver variable
         self._other_ass = [] #list of pysmt formula (Fnode)
         self._level_ass = {} #dict of z3 pysmt formula (Fnode)
         self._proxy_ass = {}
         self._chks = []
+        self.populate_db(filename)
 
+    def __del__(self):
+        del self.converter
     def _get_pre_post_name(self, name):
         if name.endswith("_0"):
             pre = name
@@ -34,36 +37,46 @@ class PySpacerSolver:
         return pre, post
 
 
-    def add_var(self, command):
+    def add_var(self, cmd):
         v, var_name, params, sort = cmd.args
         # print(v, var_name, params, sort)
 
         if var_name.endswith("_0") or var_name.endswith("_n"):
             pre, post = self._get_pre_post_name(var_name)
-            zvar_pre = z3.Const(pre, converter._type_to_z3(sort))
-            zvar_post = z3.Const(post, converter._type_to_z3(sort))
+            zvar_pre = z3.Const(pre, self.converter._type_to_z3(sort))
+            zvar_post = z3.Const(post, self.converter._type_to_z3(sort))
             self._vars[pre] = zvar_pre
             self._vars[post] = zvar_post
             self._pre2post[zvar_pre] = zvar_post
             self._post2pre[zvar_post] = zvar_pre
         elif "vsolver" in var_name:
-            self._vars[var_name] = z3.Const(var_name, converter._type_to_z3(sort))
+            self._vars[var_name] = z3.Const(var_name, self.converter._type_to_z3(sort))
             self._solver = v
         else:
-            self._vars[var_name] = z3.Const(var_name, converter._type_to_z3(sort))
+            self._vars[var_name] = z3.Const(var_name, self.converter._type_to_z3(sort))
 
+    def post2pre(self):
+        return self._post2pre
+
+    def pre2post(self):
+        return self._pre2post
+    
     def get_vars(self):
         return self._vars
+
+    def proxies_db(self):
+        return self._proxy_ass
 
     def add_assert(self, command):
         if self._assert_contains(command, "proxy"):
             head, tail = self._mk_assert_of(command, "proxy")
-            self._proxy_ass[str(head)] = {"head":head, "tail": tail, "cmd": command.args[0]}
+            self._proxy_ass[tail] = head
         elif self._assert_contains(command, "level"):
             head, tail = self._mk_assert_of(command, "level")
-            self._level_ass[str(head)] = {"head": head, "tail":tail, "cmd": command.args[0]}
+
+            self._level_ass[tail] = head
         else:
-            self._other_ass.append(command.args[0])
+            self._other_ass.append(self.converter.convert(command.args[0]))
 
     def add_chk(self, command):
         self._chks.append(command.args)
@@ -92,37 +105,14 @@ class PySpacerSolver:
         if node.is_not():
             return node.arg(0)
         else:
-            return mgr.Not(node)
+            return self.mgr.Not(node)
 
     def _mk_assert_of(self, command, ass_type):
         head, tail = self._filter_by_keyword(command.args[0].args(), ass_type)
         assert(len(head)==1)
-        head = self._negate(head[0])
-        tail = mgr.create_node(node_type = command.args[0].node_type(), args = tuple(tail),payload = None)
+        head = self.converter.convert(self._negate(head[0]))
+        tail = self.converter.convert(self.mgr.create_node(node_type = command.args[0].node_type(), args = tuple(tail),payload = None))
         return head, tail
-    
-    def check(self, levels = None, lemma = None):
-        self.solver = z3.Solver()
-
-        # add constraints to solver
-        for l in levels:
-            solver.add(converter.convert(self._level_ass[l]))
-
-        for lit in lemma:
-            solver.add(lit)
-
-        # run solver
-        res = self.solver.check()
-        # extract model or proof
-        answer = None
-        if res == z3.sat:
-            answer = self.solver.model()
-        elif res == z3.unsat:
-            answer = self.solver.proof()
-
-        print("RES", res)
-        print("ANS", answer)
-        return res, answer
 
     def _filter_by_keyword(self, nodes, keyword):
         contain_list = []
@@ -137,6 +127,18 @@ class PySpacerSolver:
             else:
                 not_contain_list.append(n)
         return contain_list, not_contain_list
+
+
+    def parse_cube(self, filename):
+        '''
+        Return a Z3 expr
+        '''
+        with open(filename, "r") as f:
+            cmds = self.parser.get_script(f).commands
+            assert(len(cmds)==1)
+            lits = [self.converter.convert(v) for v in cmds[0].args[0].args()]
+            print(lits)
+            return lits 
 
     def dump(self):
         print("VAR:")
@@ -156,29 +158,24 @@ class PySpacerSolver:
         print("CHECK-SAT:")
         for c in self._chks:
             print(c)
-filename = "/home/nv3le/workspace/saturation-visualization/deepSpacer/pobvis/app/pool_solver_vsolver#0_12.smt2"
 
-if __name__=="__main__":
-    
-    s = PySpacerSolver()
-    with open(filename, "r") as f:
-        ori_query = f.readlines()
-        for i in range(len(ori_query)):
-            l = ori_query[i]
-            if l.strip() == "(exit)":
-                break
-        query_text = "".join(ori_query[:i])
+    def populate_db(self, filename):
+        with open(filename, "r") as f:
+            ori_query = f.readlines()
+            for i in range(len(ori_query)):
+                l = ori_query[i]
+                if l.strip() == "(exit)":
+                    break
+            query_text = "".join(ori_query[:i])
 
-        all_commands = parser.get_script(cStringIO(query_text)).commands
-    
+            all_commands = self.parser.get_script(cStringIO(query_text)).commands
 
-    for cmd in all_commands:
-        if cmd.name=="declare-fun":
-            s.add_var(cmd)
-        elif cmd.name == "assert":
-            s.add_assert(cmd)
-        elif cmd.name == "check-sat":
-            s.add_chk(cmd)
-    
-    
-    s.dump()
+
+        for cmd in all_commands:
+            if cmd.name=="declare-fun":
+                self.add_var(cmd)
+            elif cmd.name == "assert":
+                self.add_assert(cmd)
+            elif cmd.name == "check-sat":
+                self.add_chk(cmd)
+

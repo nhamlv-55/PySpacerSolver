@@ -1,17 +1,24 @@
-
+from ExprDb import ExprDb
+import z3
 class SpacerSolverProxyDb(object):
-    def __init__(self):
-        pass
+    def __init__(self, proxies_db):
+        self._proxies_db = proxies_db
+        
 
     def size(self):
-        pass
+        return len(self._proxies_db)
 
     def find(self, e):
-        pass
+        return self._proxies_db[e]
 
     def add(self, e):
         """Adds proxy and returns its literal"""
-        pass
+        if e in self._proxies_db:
+            return self._proxies_db[e]
+        else:
+            new_lit = z3.Const("spacer_proxy!%s"%str(self.size()), z3.BoolSort())
+            self._proxies_db[e] = new_lit
+            return new_lit
 
     def push(self):
         pass
@@ -19,10 +26,10 @@ class SpacerSolverProxyDb(object):
         pass
 
 class SpacerSolver(object):
-    def __init__(self, zsolver):
+    def __init__(self, zsolver, proxies_db):
         self._zsolver = zsolver
         self._levels = []
-        self._proxies_db = SpacerSolverProxyDb() 
+        self._proxies_db = SpacerSolverProxyDb(proxies_db)
         self._active_level = None
 
     def add(self, e):
@@ -98,11 +105,34 @@ class InductiveGeneralizer(object):
         self._solver = solver
         self._core = None
         self._post_to_pre = post_to_pre
+        
+    def free_arith_vars(self, fml):
+        '''Returns the set of all integer uninterpreted constants in a formula'''
+        seen = set([])
+        vars = set([])
+
+        real_sort = z3.RealSort()
+        def fv(seen, vars, f):
+            if f in seen:
+                return
+            seen |= { f }
+            if f.sort().eq(real_sort) and f.decl().kind() == z3.Z3_OP_UNINTERPRETED:
+                vars |= { f }
+            for ch in f.children():
+                fv(seen, vars, ch)
+                fv(seen, vars, fml)
+        return vars
 
 
-    def _mk_pre(self, lit):
+    def _mk_pre(self, post_lit):
         # XXX Implement renaming
-        return None
+        post_vs = self.free_arith_vars(post_lit)
+
+        submap = [(post_v, self._post_to_pre[post_v]) for post_v in post_vs]
+        pre_lit = z3.substitute(post_lit, submap)
+        
+        print("POST:", post_lit, "PRE:", pre_lit)
+        return pre_lit
 
     def _is_inductive(self, cube):
         pre_lemma = [z3.Not(self._mk_pre(v)) for v in cube]
@@ -127,7 +157,7 @@ class InductiveGeneralizer(object):
         for i in range(0, len(cube)):
             saved_lit = cube[i]
             cube[i] = z3.BoolVal(True)
-            res = self._is_inductive(self, [v for v in cube if not z3.is_true(v)])
+            res = self._is_inductive([v for v in cube if not z3.is_true(v)])
 
             if res == z3.unsat:
                 # generalized
@@ -146,3 +176,18 @@ class InductiveGeneralizer(object):
         return [v for v in cube if not z3.is_true(v)]
 
 
+def main():
+    filename = "Test/pool_solver_vsolver#1_12.smt2"
+    cube_filename = "Test/test_cube"
+    zsolver = z3.Solver()
+    edb = ExprDb(filename)
+    cube = edb.parse_cube(filename = cube_filename)
+    print("POST2PRE:", edb.post2pre())
+    proxied_db = edb.proxies_db()
+    s = SpacerSolver(zsolver, proxied_db)
+    for e in edb.get_others():
+        s.add(e)
+    indgen = InductiveGeneralizer(s, edb.post2pre())
+    indgen.generalize(cube, 0)
+
+main()
