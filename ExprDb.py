@@ -26,6 +26,8 @@ class ExprDb:
         self.populate_db(filename)
 
     def __del__(self):
+        print("del converter")
+        del self.mgr
         del self.converter
     def _get_pre_post_name(self, name):
         if name.endswith("_0"):
@@ -69,12 +71,12 @@ class ExprDb:
 
     def add_assert(self, command):
         if self._assert_contains(command, "proxy"):
-            head, tail = self._mk_assert_of(command, "proxy")
-            self._proxy_ass[tail] = head
+            head, tail, _ = self._mk_assert_of(command, "proxy")
+            self._proxy_ass[head] = tail
         elif self._assert_contains(command, "level"):
-            head, tail = self._mk_assert_of(command, "level")
+            head, tail, lvl = self._mk_assert_of(command, "level")
 
-            self._level_ass[tail] = head
+            self._level_ass[head] = (lvl, tail)
         else:
             self._other_ass.append(self.converter.convert(command.args[0]))
 
@@ -108,11 +110,15 @@ class ExprDb:
             return self.mgr.Not(node)
 
     def _mk_assert_of(self, command, ass_type):
+        lvl = None
         head, tail = self._filter_by_keyword(command.args[0].args(), ass_type)
+        if "level" in str(head):
+            lvl = int(str(head).split("!")[0].split("_")[1])
+            print(lvl)
         assert(len(head)==1)
         head = self.converter.convert(self._negate(head[0]))
         tail = self.converter.convert(self.mgr.create_node(node_type = command.args[0].node_type(), args = tuple(tail),payload = None))
-        return head, tail
+        return head, tail, lvl
 
     def _filter_by_keyword(self, nodes, keyword):
         contain_list = []
