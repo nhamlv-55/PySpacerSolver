@@ -1,0 +1,6 @@
+(assert (or (not BwdInv_3_n)
+    BwdInv_4_n
+    BwdInv_5_n
+    (< BwdInv_2_n (/ 713.0 19968.0))
+    (> (+ BwdInv_2_n (* (/ 3.0 10.0) BwdInv_1_n)) (/ 117.0 1024.0)))
+)

@@ -96,6 +96,8 @@ class SpacerSolver(object):
                 assumptions.append(self._levels[i])
 
         assumptions.extend(_assumptions)
+        print("CHECKING:")
+        print(self._zsolver)
         return self._zsolver.check(*assumptions)
 
     def unsat_core(self):
@@ -126,24 +128,30 @@ class InductiveGeneralizer(object):
         seen = set([])
         vars = set([])
 
-        real_sort = z3.RealSort()
         def fv(seen, vars, f):
+            # print("F\t:", f)
+            # print("SEEN\t:", seen)
             if f in seen:
                 return
             seen |= { f }
-            if f.sort().eq(real_sort) and f.decl().kind() == z3.Z3_OP_UNINTERPRETED:
+            # print("FREE_ARITH_CHECK:\n\t". f, f.sort(), f.decl().kind())
+            if f.decl().kind() == z3.Z3_OP_UNINTERPRETED:
                 vars |= { f }
             for ch in f.children():
                 fv(seen, vars, ch)
                 fv(seen, vars, fml)
+        fv(seen, vars, fml)
         return vars
 
 
     def _mk_pre(self, post_lit):
         # XXX Implement renaming
+        # print("_MK_PRE", post_lit)
         post_vs = self.free_arith_vars(post_lit)
-
+        # print("_MK_PRE post_vs", post_vs)
+        # print(self._post_to_pre)
         submap = [(post_v, self._post_to_pre[post_v]) for post_v in post_vs]
+        print("_MK_PRE submap:", submap)
         pre_lit = z3.substitute(post_lit, submap)
         
         return pre_lit
@@ -199,8 +207,8 @@ class InductiveGeneralizer(object):
 
 
 def main():
-    filename = "Test/pool_solver_vsolver#1_12.smt2"
-    cube_filename = "Test/test_cube"
+    filename = "Test3/pool_solver_vsolver#0_12.smt2"
+    cube_filename = "Test3/test_cube"
     zsolver = z3.Solver()
     edb = ExprDb(filename)
     cube = edb.parse_cube(filename = cube_filename)
@@ -214,8 +222,8 @@ def main():
     for level_lit in levels:
         lvl, e_lvl = levels[level_lit]
         s.add_leveled(lvl, e_lvl)
-    indgen = InductiveGeneralizer(s, edb.proxies_db())
-    indgen.generalize(cube, 0)
+    indgen = InductiveGeneralizer(s, edb.post2pre())
+    indgen.generalize(cube, 1)
 
     del edb
 main()
