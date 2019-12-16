@@ -88,23 +88,31 @@ class SpacerSolver(object):
         """Return number of levels"""
         return len(self._levels)
 
-    def check(self, *_assumptions):
+    def check(self, _assumptions):
         assumptions = list()
         print("SELF.LEVELS", self._levels)
         if self.get_active_level() is not None:
             for i in range(0, self.get_active_level()):
                 assumptions.append(self._levels[i])
 
+        #activate solver
+        #FIXME
+        solver_var  = z3.Bool("vsolver#0")
+        assumptions.append(solver_var)
         assumptions.extend(_assumptions)
-        print("CHECKING:")
-        print(self._zsolver)
-        return self._zsolver.check(*assumptions)
+        print("ASSUMPTIONs:\n", assumptions)
+        res =  self._zsolver.check(*assumptions)
+
+        print("CHECKING:\n", self._zsolver)
+        return res
 
     def unsat_core(self):
         core = self._zsolver.unsat_core()
         #return [v for v in core if v is not a level atom]
         return core
 
+    def model(self):
+        return self._zsolver.model()
 
     def get_solver(self):
         return self._zsolver
@@ -159,6 +167,7 @@ class InductiveGeneralizer(object):
     def _is_inductive(self, cube):
         print("checking inductive for cube:", cube)
         pre_lemma = [z3.Not(self._mk_pre(v)) for v in cube]
+
         pre_lemma_lit = self._solver.add_proxy(z3.Or(*pre_lemma))
 
         cube_lits = [self._solver.add_proxy(lit) for lit in cube]
@@ -199,6 +208,7 @@ class InductiveGeneralizer(object):
                 # generalization failed, restore the literal
                 cube[i] = saved_lit
                 print("DROP FAILED")
+                print("MODEL:", self._solver.model())
         # restore solver level for additional queries
         self._solver.activate_level(saved_level)
 
@@ -207,7 +217,7 @@ class InductiveGeneralizer(object):
 
 
 def main():
-    filename = "Test3/pool_solver_vsolver#0_12.smt2"
+    filename = "Test3/pool_solver_vsolver#0_14.smt2"
     cube_filename = "Test3/test_cube"
     zsolver = z3.Solver()
     edb = ExprDb(filename)
@@ -223,7 +233,7 @@ def main():
         lvl, e_lvl = levels[level_lit]
         s.add_leveled(lvl, e_lvl)
     indgen = InductiveGeneralizer(s, edb.post2pre())
-    indgen.generalize(cube, 1)
+    indgen.generalize(cube, 2)
 
     del edb
 main()
