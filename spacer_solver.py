@@ -97,7 +97,7 @@ class SpacerSolver(object):
             for i in range(0, self.get_active_level()):
                 print("DISABLE level", i)
                 assumptions.append(z3.mk_not(self._levels[i]))
-            print("ACTIVATE level", i)
+            print("ACTIVATE level", i+1)
             assumptions.append(self._levels[i+1])
 
         #activate solver
@@ -226,7 +226,7 @@ class InductiveGeneralizer(object):
 
 
 def main():
-    filename = "Test3/pool_solver_vsolver#0_30.smt2"
+    filename = "Test3/pool_solver_vsolver#0_1.smt2"
     cube_filename = "Test3/test_cube"
     zsolver = z3.Solver()
     edb = ExprDb(filename)
@@ -244,7 +244,7 @@ def main():
             print("\t",lvl, e_lvl)
             s.add_leveled(lvl, e_lvl)
     indgen = InductiveGeneralizer(s, edb.post2pre())
-    inducted_cube = indgen.generalize(cube, 2)
+    inducted_cube = indgen.generalize(cube, 1)
     print("FINAL CUBE:", z3.And(inducted_cube))
     del edb
 main()
