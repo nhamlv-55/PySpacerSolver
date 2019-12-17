@@ -25,6 +25,7 @@ class ExprDb:
         self._chks = []
         self.populate_db(filename)
 
+        # print(self._level_ass)
     def __del__(self):
         print("del converter")
         del self.mgr
@@ -75,8 +76,13 @@ class ExprDb:
             self._proxy_ass[head] = tail
         elif self._assert_contains(command, "level"):
             head, tail, lvl = self._mk_assert_of(command, "level")
+            if head in self._level_ass:
 
-            self._level_ass[head] = (lvl, tail)
+
+                self._level_ass[head].append((lvl, tail))
+            else:
+                self._level_ass[head] = [(lvl, tail)]
+
         else:
             self._other_ass.append(self.converter.convert(command.args[0]))
 

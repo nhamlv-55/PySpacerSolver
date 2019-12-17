@@ -23,7 +23,7 @@ class SpacerSolverProxyDb(object):
         if new_lit is not None:
             return new_lit
         else:
-            new_lit = z3.Const("spacer_proxy!%s"%str(self.size()), z3.BoolSort())
+            new_lit = z3.Bool("spacer_proxy!#{}".format(self.size()))
             self._proxies_db[new_lit] = e
             return new_lit
 
@@ -65,8 +65,9 @@ class SpacerSolver(object):
         self._zsolver.add(z3.Implies(level_lit, e))
 
     def ensure_level(self, lvl):
+        print("LEN SELF._LEVELS", len(self._levels))
         """Ensure that solver has lvl number of levels"""
-        while (len(self._levels) < lvl):
+        while (len(self._levels) <= lvl):
             self._levels.append(self._mk_level_lit(len(self._levels)))
 
     def _mk_level_lit(self, lvl):
@@ -91,19 +92,25 @@ class SpacerSolver(object):
     def check(self, _assumptions):
         assumptions = list()
         print("SELF.LEVELS", self._levels)
+        print(self.get_active_level())
         if self.get_active_level() is not None:
             for i in range(0, self.get_active_level()):
-                assumptions.append(self._levels[i])
+                print("DISABLE level", i)
+                assumptions.append(z3.mk_not(self._levels[i]))
+            print("ACTIVATE level", i)
+            assumptions.append(self._levels[i+1])
 
         #activate solver
         #FIXME
         solver_var  = z3.Bool("vsolver#0")
+        ext_0_n_var = z3.Not(z3.Bool("BwdInv_ext0_n"))
         assumptions.append(solver_var)
+        assumptions.append(ext_0_n_var)
         assumptions.extend(_assumptions)
         print("ASSUMPTIONs:\n", assumptions)
         res =  self._zsolver.check(*assumptions)
 
-        print("CHECKING:\n", self._zsolver)
+        # print("CHECKING:\n", self._zsolver)
         return res
 
     def unsat_core(self):
@@ -159,14 +166,14 @@ class InductiveGeneralizer(object):
         # print("_MK_PRE post_vs", post_vs)
         # print(self._post_to_pre)
         submap = [(post_v, self._post_to_pre[post_v]) for post_v in post_vs]
-        print("_MK_PRE submap:", submap)
+        # print("_MK_PRE submap:", submap)
         pre_lit = z3.substitute(post_lit, submap)
         
         return pre_lit
 
     def _is_inductive(self, cube):
         print("checking inductive for cube:", cube)
-        pre_lemma = [z3.Not(self._mk_pre(v)) for v in cube]
+        pre_lemma = [z3.mk_not(self._mk_pre(v)) for v in cube]
 
         pre_lemma_lit = self._solver.add_proxy(z3.Or(*pre_lemma))
 
@@ -204,10 +211,12 @@ class InductiveGeneralizer(object):
                 # literals that are not in the unsat core are not needed for unsat
                 print("DROP SUCCESSFUL. New cube is:")
                 print([v for v in cube if not z3.is_true(v)])
+                print("UNSAT CORE:\n", self._solver.unsat_core())
             else:
                 # generalization failed, restore the literal
                 cube[i] = saved_lit
                 print("DROP FAILED")
+                print("WAS CHECKING:\n", self._solver.get_solver())
                 print("MODEL:", self._solver.model())
         # restore solver level for additional queries
         self._solver.activate_level(saved_level)
@@ -217,7 +226,7 @@ class InductiveGeneralizer(object):
 
 
 def main():
-    filename = "Test3/pool_solver_vsolver#0_14.smt2"
+    filename = "Test3/pool_solver_vsolver#0_30.smt2"
     cube_filename = "Test3/test_cube"
     zsolver = z3.Solver()
     edb = ExprDb(filename)
@@ -230,10 +239,12 @@ def main():
         s.add(e)
     levels = edb.get_levels()
     for level_lit in levels:
-        lvl, e_lvl = levels[level_lit]
-        s.add_leveled(lvl, e_lvl)
+        print("ADDING LEMMAS AT LEVEL", level_lit)
+        for (lvl, e_lvl) in levels[level_lit]:
+            print("\t",lvl, e_lvl)
+            s.add_leveled(lvl, e_lvl)
     indgen = InductiveGeneralizer(s, edb.post2pre())
-    indgen.generalize(cube, 2)
-
+    inducted_cube = indgen.generalize(cube, 2)
+    print("FINAL CUBE:", z3.And(inducted_cube))
     del edb
 main()
