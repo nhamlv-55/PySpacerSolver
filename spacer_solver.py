@@ -97,13 +97,14 @@ class SpacerSolver(object):
             for i in range(0, self.get_active_level()):
                 print("DISABLE level", i)
                 assumptions.append(z3.mk_not(self._levels[i]))
-            print("ACTIVATE level", i+1)
-            assumptions.append(self._levels[i+1])
+            for j in range(i+1, len(self._levels)):
+                print("ACTIVATE level", j)
+                assumptions.append(self._levels[j])
 
         #activate solver
         #FIXME
-        solver_var  = z3.Bool("vsolver#0")
-        ext_0_n_var = z3.Not(z3.Bool("BwdInv_ext0_n"))
+        solver_var  = z3.Bool("vsolver#1")
+        ext_0_n_var = z3.Not(z3.Bool("INV_ext0_n"))
         assumptions.append(solver_var)
         assumptions.append(ext_0_n_var)
         assumptions.extend(_assumptions)
@@ -216,7 +217,7 @@ class InductiveGeneralizer(object):
                 # generalization failed, restore the literal
                 cube[i] = saved_lit
                 print("DROP FAILED")
-                print("WAS CHECKING:\n", self._solver.get_solver())
+                print("WAS CHECKING:\n", self._solver.get_solver().sexpr())
                 print("MODEL:", self._solver.model())
         # restore solver level for additional queries
         self._solver.activate_level(saved_level)
@@ -226,8 +227,8 @@ class InductiveGeneralizer(object):
 
 
 def main():
-    filename = "Test3/pool_solver_vsolver#0_1.smt2"
-    cube_filename = "Test3/test_cube"
+    filename = "Test7/pool_solver_vsolver#1_98.smt2"
+    cube_filename = "Test7/test_cube98"
     zsolver = z3.Solver()
     edb = ExprDb(filename)
     cube = edb.parse_cube(filename = cube_filename)
@@ -244,7 +245,7 @@ def main():
             print("\t",lvl, e_lvl)
             s.add_leveled(lvl, e_lvl)
     indgen = InductiveGeneralizer(s, edb.post2pre())
-    inducted_cube = indgen.generalize(cube, 1)
+    inducted_cube = indgen.generalize(cube, 2)
     print("FINAL CUBE:", z3.And(inducted_cube))
     del edb
 main()
