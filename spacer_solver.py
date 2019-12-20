@@ -50,9 +50,9 @@ class SpacerSolverProxyDb(object):
 class SpacerSolver(object):
     def __init__(self, zsolver, proxies_db):
         self._zsolver = zsolver
-        self._levels = []
+        self._lvls = []
         self._proxies_db = SpacerSolverProxyDb(proxies_db)
-        self._active_level = None
+        self._active_lvl = None
     def add(self, e):
         """Add background assertion to the solver"""
         self._zsolver.add(e)
@@ -71,53 +71,53 @@ class SpacerSolver(object):
 
     def find_expr(self, e):
         return self._proxies_db.find_expr(e)
-    def add_leveled(self, lvl, e):
-        """Add an assertion at a specified level"""
-        self.ensure_level(lvl)
-        level_lit = self._mk_level_lit(lvl)
-        self._zsolver.add(z3.Implies(level_lit, e))
+    def add_lvled(self, lvl, e):
+        """Add an assertion at a specified lvl"""
+        self.ensure_lvl(lvl)
+        lvl_lit = self._mk_lvl_lit(lvl)
+        self._zsolver.add(z3.Implies(lvl_lit, e))
 
-    def ensure_level(self, lvl):
-        log.info("LEN SELF._LEVELS %d", len(self._levels))
-        """Ensure that solver has lvl number of levels"""
-        while (len(self._levels) <= lvl):
-            self._levels.append(self._mk_level_lit(len(self._levels)))
+    def ensure_lvl(self, lvl):
+        log.info("LEN SELF._LVLS %d", len(self._lvls))
+        """Ensure that solver has lvl number of lvls"""
+        while (len(self._lvls) <= lvl):
+            self._lvls.append(self._mk_lvl_lit(len(self._lvls)))
 
-    def _mk_level_lit(self, lvl):
-        if lvl < len(self._levels):
-            return self._levels[lvl]
+    def _mk_lvl_lit(self, lvl):
+        if lvl < len(self._lvls):
+            return self._lvls[lvl]
 
-        lit = z3.Bool("level#{}".format(lvl))
+        lit = z3.Bool("lvl#{}".format(lvl))
         return z3.Not(lit)
 
-    def activate_level(self, lvl):
-        """Activate specified level"""
-        self._active_level = lvl
+    def activate_lvl(self, lvl):
+        """Activate specified lvl"""
+        self._active_lvl = lvl
 
-    def get_active_level(self):
-        """Return currently active level"""
-        return self._active_level
+    def get_active_lvl(self):
+        """Return currently active lvl"""
+        return self._active_lvl
 
-    def levels(self):
-        """Return number of levels"""
-        return len(self._levels)
+    def lvls(self):
+        """Return number of lvls"""
+        return len(self._lvls)
 
     def check(self, _assumptions):
         assumptions = list()
-        log.info("SELF.LEVELS %s", self._levels)
-        log.info(self.get_active_level())
-        if self.get_active_level() is not None:
-            for i in range(0, self.get_active_level()):
-                log.info("DISABLE level %d", i)
-                assumptions.append(z3.mk_not(self._levels[i]))
-            for j in range(i+1, len(self._levels)):
-                log.info("ACTIVATE level %d", j)
-                assumptions.append(self._levels[j])
+        log.info("SELF.LVLS %s", self._lvls)
+        log.info(self.get_active_lvl())
+        if self.get_active_lvl() is not None:
+            for i in range(0, self.get_active_lvl()):
+                log.info("DISABLE lvl %d", i)
+                assumptions.append(z3.mk_not(self._lvls[i]))
+            for j in range(i+1, len(self._lvls)):
+                log.info("ACTIVATE lvl %d", j)
+                assumptions.append(self._lvls[j])
 
         #activate solver
         #FIXME
-        solver_var  = z3.Bool("vsolver#1")
-        ext_0_n_var = z3.Not(z3.Bool("INV_ext0_n"))
+        solver_var  = z3.Bool("vsolver#0")
+        ext_0_n_var = z3.Not(z3.Bool("BwdInv_ext0_n"))
         assumptions.append(solver_var)
         assumptions.append(ext_0_n_var)
         assumptions.extend(_assumptions)
@@ -129,7 +129,7 @@ class SpacerSolver(object):
 
     def unsat_core(self):
         core = self._zsolver.unsat_core()
-        #return [v for v in core if v is not a level atom]
+        #return [v for v in core if v is not a lvl atom]
         return core
 
     def model(self):
@@ -185,11 +185,11 @@ class InductiveGeneralizer(object):
         
         return pre_lit
 
-    def check_inductive(self, cube, level):
-        saved_level = self._solver.get_active_level()
-        self._solver.activate_level(level)
+    def check_inductive(self, cube, lvl):
+        saved_lvl = self._solver.get_active_lvl()
+        self._solver.activate_lvl(lvl)
 
-        log.info("checking inductive for cube:\n%s at level %s", cube, level)
+        log.info("checking inductive for cube:\n%s at lvl %s", cube, lvl)
         pre_lemma = [z3.mk_not(self._mk_pre(v)) for v in cube]
 
         pre_lemma_lit = self._solver.add_proxy(z3.Or(*pre_lemma))
@@ -207,8 +207,8 @@ class InductiveGeneralizer(object):
         if res == z3.unsat:
             self._core = self._solver.unsat_core()
 
-        # restore solver level for additional queries
-        self._solver.activate_level(saved_level)
+        # restore solver lvl for additional queries
+        self._solver.activate_lvl(saved_lvl)
 
         return res
 
@@ -247,28 +247,31 @@ class InductiveGeneralizer(object):
 
 
 def main():
-    filename = "Test7_unroll4/pool_solver_vsolver#1_37.smt2"
-    cube_filename = "Test7_unroll4/test_cube37"
+    filename = "pool_solver_vsolver#0_1.smt2"
+    # cube_filename = "Test7_unroll4/test_cube37"
     zsolver = z3.Solver()
     edb = ExprDb(filename)
-    cube = edb.parse_cube(filename = cube_filename)
+    cube = edb.get_cube()
+    active_lvl = edb.get_active_lvl()
+    # cube = edb.parse_cube(filename = cube_filename)
     log.info("PARSED CUBE:\n %s", cube)
+    log.info("ACTIVATE LVL:\n %d", active_lvl)
     # log.info("POST2PRE: %s", edb.post2pre())
     proxied_db = edb.proxies_db()
     s = SpacerSolver(zsolver, proxied_db)
     for e in edb.get_others():
         s.add(e)
-    levels = edb.get_levels()
-    for level_lit in levels:
-        log.info("ADDING LEMMAS AT LEVEL %s", level_lit)
-        for (lvl, e_lvl) in levels[level_lit]:
+    lvls = edb.get_lvls()
+    for lvl_lit in lvls:
+        log.info("ADDING LEMMAS AT LVL %s", lvl_lit)
+        for (lvl, e_lvl) in lvls[lvl_lit]:
             log.info("\t %s %s", lvl, e_lvl)
-            s.add_leveled(lvl, e_lvl)
+            s.add_lvled(lvl, e_lvl)
     indgen = InductiveGeneralizer(s, edb.post2pre())
-    inducted_cube = indgen.generalize(cube, 1)
+    inducted_cube = indgen.generalize(cube, active_lvl)
     #validate
     print("FINAL CUBE:\n", inducted_cube)
-    res = indgen.check_inductive(inducted_cube, 1)
+    res = indgen.check_inductive(inducted_cube, active_lvl)
     print(res)
     assert(res==z3.unsat)
     del edb

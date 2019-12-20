@@ -20,12 +20,14 @@ class ExprDb:
         self._post2pre = {}
         self._solver_var = None #vsolver variable
         self._other_ass = [] #list of pysmt formula (Fnode)
-        self._level_ass = {} #dict of z3 pysmt formula (Fnode)
+        self._lvl_ass = {} #dict of z3 pysmt formula (Fnode)
         self._proxy_ass = {}
         self._chks = []
+        self._cube = []
+        self._active_lvl = 0
         self.populate_db(filename)
-
-        # print(self._level_ass)
+        self._predicate_name = None
+        # print(self._lvl_ass)
     def __del__(self):
         print("del converter")
         del self.mgr
@@ -76,12 +78,12 @@ class ExprDb:
             self._proxy_ass[head] = tail
         elif self._assert_contains(command, "level"):
             head, tail, lvl = self._mk_assert_of(command, "level")
-            if head in self._level_ass:
+            if head in self._lvl_ass:
 
 
-                self._level_ass[head].append((lvl, tail))
+                self._lvl_ass[head].append((lvl, tail))
             else:
-                self._level_ass[head] = [(lvl, tail)]
+                self._lvl_ass[head] = [(lvl, tail)]
 
         else:
             self._other_ass.append(self.converter.convert(command.args[0]))
@@ -92,14 +94,32 @@ class ExprDb:
     def get_proxies(self):
         return self._proxy_ass
 
-    def get_levels(self):
-        return self._level_ass
+    def get_lvls(self):
+        return self._lvl_ass
 
     def get_others(self):
         return self._other_ass
 
     def get_chks(self):
         return self._chks
+
+    def set_cube(self, cmd):
+        print(cmd)
+        print(cmd.args)
+        
+        lits = [self.converter.convert(v) for v in cmd.args.args()]
+        self._cube = lits
+         
+
+    def get_cube(self):
+        return self._cube
+
+    def activate_lvl(self, cmd):
+        lvl = cmd.args
+        self._active_lvl = lvl
+
+    def get_active_lvl(self):
+        return self._active_lvl
 
     def _assert_contains(self, command, keyword):
         assert(len(command.args)==1 and command.name == "assert")
@@ -161,8 +181,8 @@ class ExprDb:
         print("PROXIES:")
         for k, v in self._proxy_ass.items():
             print(k, "->", v)
-        print("LEVELS:")
-        for k, v in self._level_ass.items():
+        print("LVLS:")
+        for k, v in self._lvl_ass.items():
             print(k, "->",  v)
         print("OTHERS:")
         for a in self._other_ass:
@@ -182,7 +202,6 @@ class ExprDb:
 
             all_commands = self.parser.get_script(cStringIO(query_text)).commands
 
-
         for cmd in all_commands:
             if cmd.name=="declare-fun":
                 self.add_var(cmd)
@@ -190,4 +209,13 @@ class ExprDb:
                 self.add_assert(cmd)
             elif cmd.name == "check-sat":
                 self.add_chk(cmd)
+            elif cmd.name == "act-lvl":
+                self.activate_lvl(cmd)
+            elif cmd.name == "ind-gen":
+                self.set_cube(cmd)
+            else:
+                print(cmd)
 
+if __name__=="__main__":
+    db = ExprDb("pool_solver_vsolver#0_1.smt2")
+    

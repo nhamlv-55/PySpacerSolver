@@ -4,7 +4,13 @@ from pysmt.exceptions import UnknownSmtLibCommandError, PysmtSyntaxError
 class Z3Parser(SmtLibParser):
     def __init__(self, env=None, interactive = False):
         SmtLibParser.__init__(self, env, interactive)
-    
+
+        # Add new commands
+        self.commands["act-lvl"] = self._cmd_act_lvl
+        self.commands["ind-gen"] = self._cmd_ind_gen
+        self.commands["push-cube"] = self._cmd_push_cube
+        
+
     def _cmd_check_sat(self, current, tokens):
         args = self.parse_check_sat_expr_list(tokens, current)
         return SmtLibCommand(current, args)
@@ -25,7 +31,21 @@ class Z3Parser(SmtLibParser):
         else:
             self.cache.bind(var, v)
         return SmtLibCommand(current, [v, var, params, typename])
-    
+
+    def _cmd_act_lvl(self, current, tokens):
+        lvl = int(self.parse_atom(tokens, current))
+        self.consume_closing(tokens, current)
+        return SmtLibCommand(current, lvl)
+        pass
+
+    def _cmd_ind_gen(self, current, tokens):
+        expr = self.get_expression(tokens)
+        self.consume_closing(tokens, current)
+        return SmtLibCommand(current, expr)
+
+    def _cmd_push_cube(self, current, tokens):
+        pass
+
     def get_script(self, script):
         """
         Takes a file object and returns a SmtLibScript object representing
