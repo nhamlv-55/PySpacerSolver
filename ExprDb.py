@@ -18,7 +18,8 @@ class ExprDb:
         self._vars = {}
         self._pre2post = {}
         self._post2pre = {}
-        self._solver_var = None #vsolver variable
+        self._solver_lit = None #vsolver variable (z3 boolref)
+        self._ext_lit = None #Blah_ext_0_n variable (z3 boolref)
         self._other_ass = [] #list of pysmt formula (Fnode)
         self._lvl_ass = {} #dict of z3 pysmt formula (Fnode)
         self._proxy_ass = {}
@@ -45,7 +46,10 @@ class ExprDb:
         v, var_name, params, sort = cmd.args
         # print(v, var_name, params, sort)
 
-        if var_name.endswith("_0") or var_name.endswith("_n"):
+        if "ext0_n" in var_name:
+            self._vars[var_name] = z3.Const(var_name, self.converter._type_to_z3(sort))
+            self._ext_lit = z3.Bool(var_name)
+        elif var_name.endswith("_0") or var_name.endswith("_n"):
             pre, post = self._get_pre_post_name(var_name)
             zvar_pre = z3.Const(pre, self.converter._type_to_z3(sort))
             zvar_post = z3.Const(post, self.converter._type_to_z3(sort))
@@ -55,9 +59,17 @@ class ExprDb:
             self._post2pre[zvar_post] = zvar_pre
         elif "vsolver" in var_name:
             self._vars[var_name] = z3.Const(var_name, self.converter._type_to_z3(sort))
-            self._solver = v
+            self._solver_lit = z3.Bool(var_name)
         else:
             self._vars[var_name] = z3.Const(var_name, self.converter._type_to_z3(sort))
+
+    def get_solver_lit(self):
+        # print("SOLVER LIT: %s", self._solver_lit)
+        return self._solver_lit
+
+    def get_ext_lit(self):
+        # print("EXT LIT:", self._ext_lit)
+        return self._ext_lit
 
     def post2pre(self):
         return self._post2pre

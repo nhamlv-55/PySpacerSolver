@@ -48,10 +48,11 @@ class SpacerSolverProxyDb(object):
         pass
 
 class SpacerSolver(object):
-    def __init__(self, zsolver, proxies_db):
+    def __init__(self, zsolver, edb):
+        self._edb = edb
         self._zsolver = zsolver
         self._lvls = []
-        self._proxies_db = SpacerSolverProxyDb(proxies_db)
+        self._proxies_db = SpacerSolverProxyDb(edb.proxies_db())
         self._active_lvl = None
     def add(self, e):
         """Add background assertion to the solver"""
@@ -116,10 +117,10 @@ class SpacerSolver(object):
 
         #activate solver
         #FIXME
-        solver_var  = z3.Bool("vsolver#0")
-        ext_0_n_var = z3.Not(z3.Bool("BwdInv_ext0_n"))
-        assumptions.append(solver_var)
-        assumptions.append(ext_0_n_var)
+        solver_lit  = self._edb.get_solver_lit()
+        ext_0_n_lit = z3.Not(self._edb.get_ext_lit())
+        assumptions.append(solver_lit)
+        assumptions.append(ext_0_n_lit)
         assumptions.extend(_assumptions)
         log.info("ASSUMPTIONs:\n%s", str(assumptions))
         res =  self._zsolver.check(*assumptions)
@@ -255,8 +256,7 @@ def main():
     log.info("PARSED CUBE:\n %s", cube)
     log.info("ACTIVATE LVL:\n %d", active_lvl)
     # log.info("POST2PRE: %s", edb.post2pre())
-    proxied_db = edb.proxies_db()
-    s = SpacerSolver(zsolver, proxied_db)
+    s = SpacerSolver(zsolver, edb)
     for e in edb.get_others():
         s.add(e)
     lvls = edb.get_lvls()
