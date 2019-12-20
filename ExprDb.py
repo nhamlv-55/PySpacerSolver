@@ -24,7 +24,7 @@ class ExprDb:
         self._lvl_ass = {} #dict of z3 pysmt formula (Fnode)
         self._proxy_ass = {}
         self._chks = []
-        self._cube = []
+        self._cubes = []
         self._active_lvl = 0
         self.populate_db(filename)
         self._predicate_name = None
@@ -114,16 +114,19 @@ class ExprDb:
     def get_chks(self):
         return self._chks
 
-    def set_cube(self, cmd):
+    def push_cube(self, cmd):
         print(cmd)
         print(cmd.args)
         
         lits = [self.converter.convert(v) for v in cmd.args.args()]
-        self._cube = lits
+        self._cubes.append(lits)
          
 
     def get_cube(self):
-        return self._cube
+        return self._cubes[-1]
+
+    def get_cubes(self):
+        return self._cubes
 
     def activate_lvl(self, cmd):
         lvl = cmd.args
@@ -211,7 +214,7 @@ class ExprDb:
             elif cmd.name == "act-lvl":
                 self.activate_lvl(cmd)
             elif cmd.name == "ind-gen":
-                self.set_cube(cmd)
+                self.push_cube(cmd)
             else:
                 print(cmd)
 
