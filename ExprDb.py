@@ -41,7 +41,6 @@ class ExprDb:
             post = name
         return pre, post
 
-
     def add_var(self, cmd):
         v, var_name, params, sort = cmd.args
         # print(v, var_name, params, sort)
@@ -159,18 +158,6 @@ class ExprDb:
             else:
                 not_contain_list.append(n)
         return contain_list, not_contain_list
-
-
-    def parse_cube(self, filename):
-        '''
-        Return a Z3 expr
-        '''
-        with open(filename, "r") as f:
-            cmds = self.parser.get_script(f).commands
-            assert(len(cmds)==1)
-            lits = [self.converter.convert(v) for v in cmds[0].args[0].args()]
-            print(lits)
-            return lits 
 
     def dump(self):
         print("VAR:")

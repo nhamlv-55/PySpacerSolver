@@ -248,12 +248,10 @@ class InductiveGeneralizer(object):
 
 def main():
     filename = "pool_solver_vsolver#0_1.smt2"
-    # cube_filename = "Test7_unroll4/test_cube37"
     zsolver = z3.Solver()
     edb = ExprDb(filename)
     cube = edb.get_cube()
     active_lvl = edb.get_active_lvl()
-    # cube = edb.parse_cube(filename = cube_filename)
     log.info("PARSED CUBE:\n %s", cube)
     log.info("ACTIVATE LVL:\n %d", active_lvl)
     # log.info("POST2PRE: %s", edb.post2pre())
