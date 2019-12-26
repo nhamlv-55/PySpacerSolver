@@ -273,4 +273,6 @@ def main():
     print(res)
     assert(res==z3.unsat)
     del edb
-main()
+
+if __name__ == '__main__':
+    main()
