@@ -93,6 +93,7 @@ class SpacerSolver(object):
 
     def activate_lvl(self, lvl):
         """Activate specified lvl"""
+        if lvl == 4294967295: lvl = -1
         self._active_lvl = lvl
 
     def get_active_lvl(self):
@@ -108,6 +109,7 @@ class SpacerSolver(object):
         log.info("SELF.LVLS %s", self._lvls)
         log.info(self.get_active_lvl())
         if self.get_active_lvl() is not None:
+            i = -1
             for i in range(0, self.get_active_lvl()):
                 log.info("DISABLE lvl %d", i)
                 assumptions.append(z3.mk_not(self._lvls[i]))
@@ -197,10 +199,10 @@ class InductiveGeneralizer(object):
 
         cube_lits = [self._solver.add_proxy(lit) for lit in cube]
         # self._solver._proxies_db.dump()
-        log.info("CUBE_LITS:\n")
+        log.debug("CUBE_LITS:\n")
         for proxy_lit in cube_lits:
-            log.info("%s : %s", proxy_lit, self._solver.get_proxy(proxy_lit))
-        log.info("PRE_LEMMA_LIT:\n %s : %s", pre_lemma_lit, self._solver.get_proxy(pre_lemma_lit))
+            log.debug("%s : %s", proxy_lit, self._solver.get_proxy(proxy_lit))
+        log.debug("PRE_LEMMA_LIT:\n %s : %s", pre_lemma_lit, self._solver.get_proxy(pre_lemma_lit))
 
 
         res = self._solver.check([pre_lemma_lit] + cube_lits)
@@ -216,8 +218,12 @@ class InductiveGeneralizer(object):
 
     def generalize(self, cube, lvl):
         """Inductive generalization of a cube given as a list"""
-
+        #reorder cube
+        # myorder = [12, 13, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        # cube = [cube[i] for i in myorder]
+        # log.info("REORDERED CUBE:%s", cube)
         for i in range(0, len(cube)):
+            log.info("TRYING TO DROP:%s", cube[i])
             saved_lit = cube[i]
             cube[i] = z3.BoolVal(True)
             res = self.check_inductive([v for v in cube if not z3.is_true(v)], lvl)
@@ -248,7 +254,7 @@ class InductiveGeneralizer(object):
 
 
 def main():
-    filename = "pool_solver_vsolver#0_1.smt2"
+    filename = "Exp2/ind_gen_files/pool_solver_vsolver#0_2.smt2.with_lemma.smt2"
     zsolver = z3.Solver()
     edb = ExprDb(filename)
     cube = edb.get_cube()
@@ -268,7 +274,7 @@ def main():
     indgen = InductiveGeneralizer(s, edb.post2pre())
     inducted_cube = indgen.generalize(cube, active_lvl)
     #validate
-    print("FINAL CUBE:\n", inducted_cube)
+    print("FINAL CUBE:\n", z3.And(inducted_cube))
     res = indgen.check_inductive(inducted_cube, active_lvl)
     print(res)
     assert(res==z3.unsat)
