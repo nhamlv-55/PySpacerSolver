@@ -196,11 +196,7 @@ class ExprDb:
     def populate_db(self, filename):
         with open(filename, "r") as f:
             ori_query = f.readlines()
-            for i in range(len(ori_query)):
-                l = ori_query[i]
-                if l.strip() == "(exit)":
-                    break
-            query_text = "".join(ori_query[:i])
+            query_text = "".join(ori_query)
 
             all_commands = self.parser.get_script(cStringIO(query_text)).commands
 
