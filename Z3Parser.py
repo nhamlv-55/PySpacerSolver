@@ -1,5 +1,9 @@
 from pysmt.smtlib.parser import SmtLibParser, SmtLibCommand, SmtLibScript
 from pysmt.exceptions import UnknownSmtLibCommandError, PysmtSyntaxError
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.CRITICAL)
 
 class Z3Parser(SmtLibParser):
     def __init__(self, env=None, interactive = False):
@@ -72,6 +76,6 @@ class Z3Parser(SmtLibParser):
             try:
                 current = self.get_expression(tokens)
                 res.append(current)
-                print(current)
+                logger.debug(current)
             except PysmtSyntaxError:
                 return res

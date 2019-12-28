@@ -3,6 +3,11 @@ from pysmt.smtlib.parser import SmtLibParser, SmtLibCommand, SmtLibScript
 from six.moves import cStringIO
 from pysmt.smtlib.printers import SmtPrinter, SmtDagPrinter, quote
 import pysmt.solvers.z3 as pyz3
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.CRITICAL)
+
 
 from pysmt.fnode import FNode, FNodeContent
 from Z3Parser import Z3Parser
@@ -28,9 +33,9 @@ class ExprDb:
         self._active_lvl = 0
         self.populate_db(filename)
         self._predicate_name = None
-        # print(self._lvl_ass)
+        # logger.debug(self._lvl_ass)
     def __del__(self):
-        print("del converter")
+        logger.debug("del converter")
         del self.mgr
         del self.converter
     def _get_pre_post_name(self, name):
@@ -44,7 +49,7 @@ class ExprDb:
 
     def add_var(self, cmd):
         v, var_name, params, sort = cmd.args
-        # print(v, var_name, params, sort)
+        # logger.debug(v, var_name, params, sort)
 
         if "ext0_n" in var_name:
             self._vars[var_name] = z3.Const(var_name, self.converter._type_to_z3(sort))
@@ -64,11 +69,11 @@ class ExprDb:
             self._vars[var_name] = z3.Const(var_name, self.converter._type_to_z3(sort))
 
     def get_solver_lit(self):
-        # print("SOLVER LIT: %s", self._solver_lit)
+        # logger.debug("SOLVER LIT: %s", self._solver_lit)
         return self._solver_lit
 
     def get_ext_lit(self):
-        # print("EXT LIT:", self._ext_lit)
+        # logger.debug("EXT LIT:", self._ext_lit)
         return self._ext_lit
 
     def post2pre(self):
@@ -115,8 +120,8 @@ class ExprDb:
         return self._chks
 
     def push_cube(self, cmd):
-        print(cmd)
-        print(cmd.args)
+        logger.debug(cmd)
+        logger.debug(cmd.args)
         
         lits = [self.converter.convert(v) for v in cmd.args.args()]
         self._cubes.append(lits)
@@ -154,7 +159,7 @@ class ExprDb:
         head, tail = self._filter_by_keyword(command.args[0].args(), ass_type)
         if "level" in str(head):
             lvl = int(str(head).split("!")[0].split("_")[1])
-            print(lvl)
+            logger.debug(lvl)
         assert(len(head)==1)
         head = self.converter.convert(self._negate(head[0]))
         tail = self.converter.convert(self.mgr.create_node(node_type = command.args[0].node_type(), args = tuple(tail),payload = None))
@@ -175,23 +180,23 @@ class ExprDb:
         return contain_list, not_contain_list
 
     def dump(self):
-        print("VAR:")
+        logger.debug("VAR:")
         for k, v in self._vars.items():
-            print(k, v)
-        print("SOLVER:")
-        print(self._solver)
-        print("PROXIES:")
+            logger.debug(k, v)
+        logger.debug("SOLVER:")
+        logger.debug(self._solver)
+        logger.debug("PROXIES:")
         for k, v in self._proxy_ass.items():
-            print(k, "->", v)
-        print("LVLS:")
+            logger.debug(k, "->", v)
+        logger.debug("LVLS:")
         for k, v in self._lvl_ass.items():
-            print(k, "->",  v)
-        print("OTHERS:")
+            logger.debug(k, "->",  v)
+        logger.debug("OTHERS:")
         for a in self._other_ass:
-            print(a)
-        print("CHECK-SAT:")
+            logger.debug(a)
+        logger.debug("CHECK-SAT:")
         for c in self._chks:
-            print(c)
+            logger.debug(c)
 
     def populate_db(self, filename):
         with open(filename, "r") as f:
@@ -212,7 +217,7 @@ class ExprDb:
             elif cmd.name == "ind-gen":
                 self.push_cube(cmd)
             else:
-                print(cmd)
+                logger.debug(cmd)
 
 if __name__=="__main__":
     db = ExprDb("pool_solver_vsolver#0_1.smt2")
