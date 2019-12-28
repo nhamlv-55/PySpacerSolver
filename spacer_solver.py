@@ -93,7 +93,6 @@ class SpacerSolver(object):
 
     def activate_lvl(self, lvl):
         """Activate specified lvl"""
-        if lvl == 4294967295: lvl = -1
         self._active_lvl = lvl
 
     def get_active_lvl(self):
@@ -110,7 +109,7 @@ class SpacerSolver(object):
         log.info(self.get_active_lvl())
         if self.get_active_lvl() is not None:
             i = -1
-            for i in range(0, self.get_active_lvl()):
+            for i in range(0, min(len(self._lvls), self.get_active_lvl())):
                 log.info("DISABLE lvl %d", i)
                 assumptions.append(z3.mk_not(self._lvls[i]))
             for j in range(i+1, len(self._lvls)):
@@ -150,11 +149,12 @@ class SpacerSolver(object):
 
 
 class InductiveGeneralizer(object):
-    def __init__(self, solver, post_to_pre, use_unsat_core = True):
+    def __init__(self, solver, post_to_pre, use_unsat_core = True, lits_to_keep = []):
         self._solver = solver
         self._core = None
         self._post_to_pre = post_to_pre
         self._use_unsat_core = use_unsat_core
+        self._lits_to_keep = lits_to_keep
     def free_arith_vars(self, fml):
         '''Returns the set of all integer uninterpreted constants in a formula'''
         seen = set([])
@@ -223,6 +223,9 @@ class InductiveGeneralizer(object):
         # cube = [cube[i] for i in myorder]
         # log.info("REORDERED CUBE:%s", cube)
         for i in range(0, len(cube)):
+            if i in self._lits_to_keep:
+                log.info("KEEP THIS LIT")
+                continue
             log.info("TRYING TO DROP:%s", cube[i])
             saved_lit = cube[i]
             cube[i] = z3.BoolVal(True)
@@ -232,7 +235,7 @@ class InductiveGeneralizer(object):
                 # generalized
                 # only keep literals in the cube if they are also in the unsat core
                 # literals that are not in the unsat core are not needed for unsat
-                log.info("DROP SUCCESSFUL. New cube is:\n")
+                log.info("DROP SUCCESSFUL. New cube is:")
                 log.info([v for v in cube if not z3.is_true(v)])
                 log.debug("UNSAT CORE:\n %s", self._solver.unsat_core())
                 # use the unsat core
@@ -240,7 +243,7 @@ class InductiveGeneralizer(object):
                     if cube[j]==z3.BoolVal(True): continue
                     p = self._solver.find_expr(cube[j])
                     if p not in self._solver.unsat_core():
-                        log.debug(cube[j], "<-", p, " is not in the UNSAT CORE. Drop")
+                        log.debug("%s <- %s is not in the UNSAT CORE. Drop"%(cube[j], p))
                         cube[j] = z3.BoolVal(True)
             else:
                 # generalization failed, restore the literal
@@ -254,7 +257,7 @@ class InductiveGeneralizer(object):
 
 
 def main():
-    filename = "Exp2/ind_gen_files/pool_solver_vsolver#0_2.smt2.with_lemma.smt2"
+    filename = "Exp2/ind_gen_files/pool_solver_vsolver#0_0.smt2.with_lemma.smt2"
     zsolver = z3.Solver()
     edb = ExprDb(filename)
     cube = edb.get_cube()
