@@ -3,7 +3,7 @@ import z3
 import logging
 
 log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.CRITICAL)
 class SpacerSolverProxyDb(object):
     def __init__(self, proxies_db):
         #map from proxy_lit to expr. Note that there maybe duplicated exprs
@@ -222,6 +222,7 @@ class InductiveGeneralizer(object):
         # myorder = [12, 13, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         # cube = [cube[i] for i in myorder]
         # log.info("REORDERED CUBE:%s", cube)
+        hindsight_lit_to_keep = []
         for i in range(0, len(cube)):
             if i in self._lits_to_keep:
                 log.info("KEEP THIS LIT")
@@ -252,12 +253,13 @@ class InductiveGeneralizer(object):
                 log.debug("WAS CHECKING:\n %s", self._solver.get_solver().sexpr())
                 log.debug("MODEL: %s", self._solver.model())
                 # compute generalized cube
-
+                hindsight_lit_to_keep.append(i)
+        print("CANNOT DROP:", hindsight_lit_to_keep)
         return [v for v in cube if not z3.is_true(v)]
 
 
 def main():
-    filename = "Exp2/ind_gen_files/pool_solver_vsolver#0_0.smt2.with_lemma.smt2"
+    filename = "Exp2/ind_gen_files/pool_solver_vsolver#0_2.smt2.with_lemma.smt2"
     zsolver = z3.Solver()
     edb = ExprDb(filename)
     cube = edb.get_cube()
@@ -274,7 +276,7 @@ def main():
         for (lvl, e_lvl) in lvls[lvl_lit]:
             log.info("\t %s %s", lvl, e_lvl)
             s.add_lvled(lvl, e_lvl)
-    indgen = InductiveGeneralizer(s, edb.post2pre())
+    indgen = InductiveGeneralizer(s, edb.post2pre(), lits_to_keep = [0, 1])
     inducted_cube = indgen.generalize(cube, active_lvl)
     #validate
     print("FINAL CUBE:\n", z3.And(inducted_cube))
