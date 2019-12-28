@@ -4,6 +4,7 @@ import logging
 import argparse
 import glob
 import os
+import json
 
 class SpacerSolverProxyDb(object):
     def __init__(self, proxies_db):
@@ -136,7 +137,10 @@ class SpacerSolver(object):
         return core
 
     def model(self):
-        return self._zsolver.model()
+        try:
+            return self._zsolver.model()
+        except Exception as e:
+            return None
 
     def get_solver(self):
         return self._zsolver
@@ -190,6 +194,8 @@ class InductiveGeneralizer(object):
         return pre_lit
 
     def check_inductive(self, cube, lvl):
+        if len(cube)==0:
+            return z3.sat
         saved_lvl = self._solver.get_active_lvl()
         self._solver.activate_lvl(lvl)
 
@@ -256,8 +262,6 @@ class InductiveGeneralizer(object):
                 # compute generalized cube
                 hindsight_lit_to_keep.append(i)
         print("CANNOT DROP:", hindsight_lit_to_keep)
-        if len(hindsight_lit_to_keep) ==0:
-            log.debug(self._solver.get_solver().sexpr())
         return [v for v in cube if not z3.is_true(v)]
 
 
@@ -289,16 +293,23 @@ def ind_gen(filename, lits_to_keep = []):
     del edb
     del zsolver
 
-def ind_gen_folder(folder):
-    queries = glob.glob("Exp2/ind_gen_files/*.smt2")
+def ind_gen_folder(folder, policy_file):
+    policy = {}
+    if policy_file is not None:
+        with open(policy_file, "r") as f:
+            policy = json.load(f)
+    queries = glob.glob(folder+"/*.smt2")
     for q in queries:
         print(q)
-        ind_gen(q, [])
+        if q in policy:
+            ind_gen(q, policy[q])
+        else:
+            ind_gen(q)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-input',
-                        help='could be a smt2 file or a folder')
+    parser.add_argument('-input', help='could be a smt2 file or a folder')
+    parser.add_argument('-policy', help='a json policy file')
     parser.add_argument("-l", "--log", dest="logLevel", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], default='CRITICAL', help="Set the logging level")
     args = parser.parse_args()
     print(args.logLevel)
@@ -307,7 +318,7 @@ if __name__ == '__main__':
     log.setLevel(getattr(logging, args.logLevel))
     # logging.basicConfig(level=getattr(logging, args.logLevel))
     if os.path.isdir(args.input):
-        ind_gen_folder(args.input)
+        ind_gen_folder(args.input, args.policy)
     elif os.path.isfile(args.input):
         ind_gen(args.input)
     else:
