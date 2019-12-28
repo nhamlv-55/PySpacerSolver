@@ -1,9 +1,10 @@
 from ExprDb import ExprDb
 import z3
 import logging
+import argparse
+import glob
+import os
 
-log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.CRITICAL)
 class SpacerSolverProxyDb(object):
     def __init__(self, proxies_db):
         #map from proxy_lit to expr. Note that there maybe duplicated exprs
@@ -255,11 +256,13 @@ class InductiveGeneralizer(object):
                 # compute generalized cube
                 hindsight_lit_to_keep.append(i)
         print("CANNOT DROP:", hindsight_lit_to_keep)
+        if len(hindsight_lit_to_keep) ==0:
+            log.debug(self._solver.get_solver().sexpr())
         return [v for v in cube if not z3.is_true(v)]
 
 
-def main():
-    filename = "Exp2/ind_gen_files/pool_solver_vsolver#0_2.smt2.with_lemma.smt2"
+def ind_gen(filename, lits_to_keep = []):
+    # filename = "Exp2/ind_gen_files/pool_solver_vsolver#0_2.smt2.with_lemma.smt2"
     zsolver = z3.Solver()
     edb = ExprDb(filename)
     cube = edb.get_cube()
@@ -276,14 +279,37 @@ def main():
         for (lvl, e_lvl) in lvls[lvl_lit]:
             log.info("\t %s %s", lvl, e_lvl)
             s.add_lvled(lvl, e_lvl)
-    indgen = InductiveGeneralizer(s, edb.post2pre(), lits_to_keep = [0, 1])
+    indgen = InductiveGeneralizer(s, edb.post2pre(), use_unsat_core = False, lits_to_keep = lits_to_keep)
     inducted_cube = indgen.generalize(cube, active_lvl)
     #validate
-    print("FINAL CUBE:\n", z3.And(inducted_cube))
+    log.info("FINAL CUBE:\n%s", z3.And(inducted_cube))
     res = indgen.check_inductive(inducted_cube, active_lvl)
-    print(res)
+    log.info(res)
     assert(res==z3.unsat)
     del edb
+    del zsolver
+
+def ind_gen_folder(folder):
+    queries = glob.glob("Exp2/ind_gen_files/*.smt2")
+    for q in queries:
+        print(q)
+        ind_gen(q, [])
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-input',
+                        help='could be a smt2 file or a folder')
+    parser.add_argument("-l", "--log", dest="logLevel", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], default='CRITICAL', help="Set the logging level")
+    args = parser.parse_args()
+    print(args.logLevel)
+    print(getattr(logging, args.logLevel))
+    log = logging.getLogger(__name__)
+    log.setLevel(getattr(logging, args.logLevel))
+    # logging.basicConfig(level=getattr(logging, args.logLevel))
+    if os.path.isdir(args.input):
+        ind_gen_folder(args.input)
+    elif os.path.isfile(args.input):
+        ind_gen(args.input)
+    else:
+        print("not a file or folder")
+   
