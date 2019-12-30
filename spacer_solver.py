@@ -5,7 +5,7 @@ import argparse
 import glob
 import os
 import json
-
+import time
 class SpacerSolverProxyDb(object):
     def __init__(self, proxies_db):
         #map from proxy_lit to expr. Note that there maybe duplicated exprs
@@ -159,7 +159,9 @@ class InductiveGeneralizer(object):
         self._core = None
         self._post_to_pre = post_to_pre
         self._use_unsat_core = use_unsat_core
-        self._lits_to_keep = lits_to_keep
+        self.lits_to_keep = lits_to_keep
+        self.useful_time = 0
+        self.wasted_time = 0
     def free_arith_vars(self, fml):
         '''Returns the set of all integer uninterpreted constants in a formula'''
         seen = set([])
@@ -229,17 +231,18 @@ class InductiveGeneralizer(object):
         # myorder = [12, 13, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         # cube = [cube[i] for i in myorder]
         # log.info("REORDERED CUBE:%s", cube)
-        hindsight_lit_to_keep = []
         for i in range(0, len(cube)):
-            if i in self._lits_to_keep:
+            if i in self.lits_to_keep:
                 log.info("KEEP THIS LIT")
                 continue
             log.info("TRYING TO DROP:%s", cube[i])
             saved_lit = cube[i]
             cube[i] = z3.BoolVal(True)
+            t1 = time.time()
             res = self.check_inductive([v for v in cube if not z3.is_true(v)], lvl)
-            
+            t2 = time.time()
             if res == z3.unsat:
+                self.useful_time += (t2-t1)
                 # generalized
                 # only keep literals in the cube if they are also in the unsat core
                 # literals that are not in the unsat core are not needed for unsat
@@ -254,19 +257,20 @@ class InductiveGeneralizer(object):
                         log.debug("%s <- %s is not in the UNSAT CORE. Drop"%(cube[j], p))
                         cube[j] = z3.BoolVal(True)
             else:
+                self.wasted_time +=(t2-t1)
                 # generalization failed, restore the literal
                 cube[i] = saved_lit
                 log.info("DROP FAILED")
                 log.debug("WAS CHECKING:\n %s", self._solver.get_solver().sexpr())
                 log.debug("MODEL: %s", self._solver.model())
                 # compute generalized cube
-                hindsight_lit_to_keep.append(i)
-        print("CANNOT DROP:", hindsight_lit_to_keep)
+                #safe to add because if i is in lits_to_keep, i has already been skipped earilier
+                self.lits_to_keep.append(i)
+        print("CANNOT DROP:", self.lits_to_keep)
         return [v for v in cube if not z3.is_true(v)]
 
 
-def ind_gen(filename, lits_to_keep = []):
-    # filename = "Exp2/ind_gen_files/pool_solver_vsolver#0_2.smt2.with_lemma.smt2"
+def ind_gen(filename, lits_to_keep ):
     zsolver = z3.Solver()
     edb = ExprDb(filename)
     cube = edb.get_cube()
@@ -283,17 +287,20 @@ def ind_gen(filename, lits_to_keep = []):
         for (lvl, e_lvl) in lvls[lvl_lit]:
             log.info("\t %s %s", lvl, e_lvl)
             s.add_lvled(lvl, e_lvl)
-    indgen = InductiveGeneralizer(s, edb.post2pre(), use_unsat_core = False, lits_to_keep = lits_to_keep)
-    inducted_cube = indgen.generalize(cube, active_lvl)
+    generalizer = InductiveGeneralizer(s, edb.post2pre(), use_unsat_core = False, lits_to_keep = lits_to_keep)
+    inducted_cube = generalizer.generalize(cube, active_lvl)
     #validate
     log.info("FINAL CUBE:\n%s", z3.And(inducted_cube))
-    res = indgen.check_inductive(inducted_cube, active_lvl)
+    res = generalizer.check_inductive(inducted_cube, active_lvl)
     log.info(res)
     assert(res==z3.unsat)
     del edb
     del zsolver
+    return {"useful": generalizer.useful_time, "wasted": generalizer.wasted_time, "lits_to_keep": generalizer.lits_to_keep}
 
 def ind_gen_folder(folder, policy_file):
+    total_useful = 0
+    total_wasted = 0
     policy = {}
     if policy_file is not None:
         with open(policy_file, "r") as f:
@@ -302,10 +309,18 @@ def ind_gen_folder(folder, policy_file):
     for q in queries:
         print(q)
         if q in policy:
-            ind_gen(q, policy[q])
+            res = ind_gen(q, policy[q])
+            total_useful += res["useful"]
+            total_wasted += res["wasted"]
         else:
-            ind_gen(q)
-
+            res = ind_gen(q, [])
+            total_useful += res["useful"]
+            total_wasted +=res["wasted"]
+            policy[q] = res["lits_to_keep"]
+    print("Total useful:", total_useful)
+    print("Total wasted:", total_wasted)
+    with open(os.path.join(folder, "policy.json"), "w") as f:
+        json.dump(policy, f, indent = 4)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-input', help='could be a smt2 file or a folder')
