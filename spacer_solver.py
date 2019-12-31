@@ -335,7 +335,7 @@ if __name__ == '__main__':
     if os.path.isdir(args.input):
         ind_gen_folder(args.input, args.policy)
     elif os.path.isfile(args.input):
-        ind_gen(args.input)
+        ind_gen(args.input, [])
     else:
         print("not a file or folder")
    
