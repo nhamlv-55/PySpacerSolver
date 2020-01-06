@@ -259,7 +259,7 @@ class InductiveGeneralizer(object):
                         log.debug("%s <- %s is not in the UNSAT CORE. Drop"%(cube[j], p))
                         cube[j] = z3.BoolVal(True)
             else:
-                print("somehow wasted", i )
+                # print("somehow wasted", i )
                 self.wasted_time +=(t2-t1)
                 # generalization failed, restore the literal
                 cube[i] = saved_lit
@@ -273,7 +273,7 @@ class InductiveGeneralizer(object):
         return [v for v in cube if not z3.is_true(v)]
 
 
-def ind_gen(filename, lits_to_keep ):
+def ind_gen(filename, lits_to_keep , drop_all = False):
     assert('zsolver' not in globals())
     zsolver = z3.Solver()
     zsolver.set('arith.solver', 6)
@@ -292,26 +292,45 @@ def ind_gen(filename, lits_to_keep ):
         for (lvl, e_lvl) in lvls[lvl_lit]:
             log.info("\t %s %s", lvl, e_lvl)
             s.add_lvled(lvl, e_lvl)
+
     generalizer = InductiveGeneralizer(s, edb.post2pre(), use_unsat_core = False, lits_to_keep = lits_to_keep)
-    before_gen = time.time()
-    inducted_cube = generalizer.generalize(cube, active_lvl)
-    after_gen = time.time()
-    #validate
-    log.info("FINAL CUBE:\n%s", z3.And(inducted_cube))
-    res = generalizer.check_inductive(inducted_cube, active_lvl)
-    log.info(res)
-    assert(res==z3.unsat)
-    del edb
-    del zsolver
-    return {"useful": generalizer.useful_time, "wasted": generalizer.wasted_time, "lits_to_keep": generalizer.lits_to_keep, "ind_gen_time": after_gen - before_gen}
+    if drop_all:
+        inducted_cube = []
+        for i in range(len(cube)):
+            if i in lits_to_keep:
+                inducted_cube.append(cube[i])
+        #validate
+        log.info("FINAL CUBE:\n%s", z3.And(inducted_cube))
+        before_check = time.time()
+        res = generalizer.check_inductive(inducted_cube, active_lvl)
+        after_check = time.time()
+        log.info(res)
+        assert(res==z3.unsat)
+        del edb
+        del zsolver
+        return {"useful": generalizer.useful_time, "wasted": generalizer.wasted_time, "lits_to_keep": generalizer.lits_to_keep, "checking_time": after_check - before_check}
+
+    else:
+        before_gen = time.time()
+        inducted_cube = generalizer.generalize(cube, active_lvl)
+        after_gen = time.time()
+        #validate
+        log.info("FINAL CUBE:\n%s", z3.And(inducted_cube))
+        res = generalizer.check_inductive(inducted_cube, active_lvl)
+        log.info(res)
+        assert(res==z3.unsat)
+        del edb
+        del zsolver
+        return {"useful": generalizer.useful_time, "wasted": generalizer.wasted_time, "lits_to_keep": generalizer.lits_to_keep, "ind_gen_time": after_gen - before_gen}
 
 def powerset(policy):
     "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
     return chain.from_iterable(combinations(policy, r) for r in range(len(policy)+1))
 
-def ind_gen_folder(folder, policy_file):
+def ind_gen_folder(folder, policy_file, use_powerset):
     total_useful = 0
     total_wasted = 0
+    running_times = []
     policy = {}
     if policy_file is not None:
         with open(policy_file, "r") as f:
@@ -319,17 +338,39 @@ def ind_gen_folder(folder, policy_file):
     queries = glob.glob(folder+"/*.smt2")
     for q in queries:
         print(q)
+        base_policy = policy[q]
+        print("BASE POLICY:%s"%str(base_policy))
+        res = ind_gen(q, base_policy, drop_all = True)
+        drop_all_runtime = res["checking_time"]
+        print("DROPPING ALL AT ONE:", drop_all_runtime)
         if q in policy:
-            base_policy = policy[q]
-            print("BASE POLICY:%s"%str(base_policy))
-            power_policies  = list(powerset(base_policy))
-            print(power_policies)
-            for p in power_policies:
-                lits_to_keep = sorted(list(p))
-                res = ind_gen(q, sorted(lits_to_keep))
-                print("Trying %s in %s"%(str(lits_to_keep), str(res["ind_gen_time"])))
+            if use_powerset:
+                power_policies  = list(powerset(base_policy))
+                print(power_policies)
+                results = {}
+                for p in power_policies:
+                    lits_to_keep = sorted(list(p))
+                    #has to parse a copy of the lits_to_keep
+                    res = ind_gen(q, lits_to_keep[:])
+                    log.info("Trying %s in %s"%(str(lits_to_keep), str(res["ind_gen_time"])))
+                    total_useful += res["useful"]
+                    total_wasted += res["wasted"]
+                    results[tuple(lits_to_keep)] = res["ind_gen_time"]
+                #sort res to check if dropping all dropable lits is the best policy
+                sorted_res = [(k, v) for k, v in sorted(results.items(), key=lambda item: item[1])]
+                print(sorted_res)
+                base_policy = tuple(sorted(base_policy))
+                best_policy = sorted_res[0][0]
+                running_times.append({"best": sorted_res[0][1], "best_policy": sorted_res[0][0], "base_policy": base_policy, "drop_all": drop_all_runtime})
+                if base_policy != best_policy:
+                    print("WARNING: not the best policy. Best: %s. Base: %s"%(best_policy, base_policy))
+
+            else:
+                res = ind_gen(q, policy[q])
                 total_useful += res["useful"]
-                total_wasted += res["wasted"]
+                total_wasted +=res["wasted"]
+                policy[q] = res["lits_to_keep"]
+
         else:
             res = ind_gen(q, [])
             total_useful += res["useful"]
@@ -339,11 +380,14 @@ def ind_gen_folder(folder, policy_file):
     print("Total wasted:", total_wasted)
     with open(os.path.join(folder, "policy.json"), "w") as f:
         json.dump(policy, f, indent = 4)
+    with open(os.path.join(folder, "running_times.json"), "w") as f:
+        json.dump(running_times, f, indent = 4)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-input', help='could be a smt2 file or a folder')
     parser.add_argument('-policy', help='a json policy file')
     parser.add_argument("-l", "--log", dest="logLevel", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], default='CRITICAL', help="Set the logging level")
+    parser.add_argument('-powerset', action='store_true')
     args = parser.parse_args()
     print(args.logLevel)
     print(getattr(logging, args.logLevel))
@@ -351,7 +395,7 @@ if __name__ == '__main__':
     log.setLevel(getattr(logging, args.logLevel))
     # logging.basicConfig(level=getattr(logging, args.logLevel))
     if os.path.isdir(args.input):
-        ind_gen_folder(args.input, args.policy)
+        ind_gen_folder(args.input, args.policy, args.powerset)
     elif os.path.isfile(args.input):
         ind_gen(args.input, [])
     else:
