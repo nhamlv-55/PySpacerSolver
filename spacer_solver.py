@@ -6,6 +6,8 @@ import glob
 import os
 import json
 import time
+from itertools import chain, combinations
+
 class SpacerSolverProxyDb(object):
     def __init__(self, proxies_db):
         #map from proxy_lit to expr. Note that there maybe duplicated exprs
@@ -257,6 +259,7 @@ class InductiveGeneralizer(object):
                         log.debug("%s <- %s is not in the UNSAT CORE. Drop"%(cube[j], p))
                         cube[j] = z3.BoolVal(True)
             else:
+                print("somehow wasted", i )
                 self.wasted_time +=(t2-t1)
                 # generalization failed, restore the literal
                 cube[i] = saved_lit
@@ -271,7 +274,9 @@ class InductiveGeneralizer(object):
 
 
 def ind_gen(filename, lits_to_keep ):
+    assert('zsolver' not in globals())
     zsolver = z3.Solver()
+    zsolver.set('arith.solver', 6)
     edb = ExprDb(filename)
     cube = edb.get_cube()
     active_lvl = edb.get_active_lvl()
@@ -288,7 +293,9 @@ def ind_gen(filename, lits_to_keep ):
             log.info("\t %s %s", lvl, e_lvl)
             s.add_lvled(lvl, e_lvl)
     generalizer = InductiveGeneralizer(s, edb.post2pre(), use_unsat_core = False, lits_to_keep = lits_to_keep)
+    before_gen = time.time()
     inducted_cube = generalizer.generalize(cube, active_lvl)
+    after_gen = time.time()
     #validate
     log.info("FINAL CUBE:\n%s", z3.And(inducted_cube))
     res = generalizer.check_inductive(inducted_cube, active_lvl)
@@ -296,7 +303,11 @@ def ind_gen(filename, lits_to_keep ):
     assert(res==z3.unsat)
     del edb
     del zsolver
-    return {"useful": generalizer.useful_time, "wasted": generalizer.wasted_time, "lits_to_keep": generalizer.lits_to_keep}
+    return {"useful": generalizer.useful_time, "wasted": generalizer.wasted_time, "lits_to_keep": generalizer.lits_to_keep, "ind_gen_time": after_gen - before_gen}
+
+def powerset(policy):
+    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+    return chain.from_iterable(combinations(policy, r) for r in range(len(policy)+1))
 
 def ind_gen_folder(folder, policy_file):
     total_useful = 0
@@ -309,9 +320,16 @@ def ind_gen_folder(folder, policy_file):
     for q in queries:
         print(q)
         if q in policy:
-            res = ind_gen(q, policy[q])
-            total_useful += res["useful"]
-            total_wasted += res["wasted"]
+            base_policy = policy[q]
+            print("BASE POLICY:%s"%str(base_policy))
+            power_policies  = list(powerset(base_policy))
+            print(power_policies)
+            for p in power_policies:
+                lits_to_keep = sorted(list(p))
+                res = ind_gen(q, sorted(lits_to_keep))
+                print("Trying %s in %s"%(str(lits_to_keep), str(res["ind_gen_time"])))
+                total_useful += res["useful"]
+                total_wasted += res["wasted"]
         else:
             res = ind_gen(q, [])
             total_useful += res["useful"]
