@@ -7,7 +7,10 @@ import os
 import json
 import time
 from itertools import chain, combinations
+from termcolor import colored
+import copy
 
+import Doping.utils.utils as Du
 class SpacerSolverProxyDb(object):
     def __init__(self, proxies_db):
         #map from proxy_lit to expr. Note that there maybe duplicated exprs
@@ -272,8 +275,36 @@ class InductiveGeneralizer(object):
         print("CANNOT DROP:", self.lits_to_keep)
         return [v for v in cube if not z3.is_true(v)]
 
+def gen_datapoints(cube, inducted_cube, vocab, filename):
+    for i in range(len(cube)):
+        for j in range(i+1, len(cube)):
+            '''4 possible labels: both lits are dropped 0, only one is dropped 1, non is dropped 2'''
+            if cube[i] in inducted_cube and cube[j] in inducted_cube:
+                label = 0
+            elif cube[i] not in inducted_cube and cube[j] not in inducted_cube:
+                label = 1
+            else:
+                label = 2
 
-def ind_gen(filename, lits_to_keep , drop_all = False):
+            print("C")
+            C_tree = Du.ast_to_node(z3.And(cube), vocab)
+            print("La")
+            L_a_tree = Du.ast_to_node(cube[i], vocab)
+            print("Lb")
+            L_b_tree = Du.ast_to_node(cube[j], vocab)
+
+            datapoint = {"C_tree": C_tree.to_json(), "L_a_tree": L_a_tree.to_json(), "L_b_tree": L_b_tree.to_json(), "label": label}
+            dp_filename = filename+ "."+ str(i)+ "."+ str(j)+ ".json"
+            with open(dp_filename, "w") as f:
+                json.dump(datapoint, f)
+    return vocab
+
+def ind_gen(filename, lits_to_keep , vocab, drop_all = False, vis = False):
+    '''
+    lits_to_keep: a list of literal that we skip checking (== will be kept unless they are not in the unsat core)
+    drop_all: whether we drop literals one by one or all at once
+    vis: whether to dump a ind_gen visualization
+    '''
     assert('zsolver' not in globals())
     zsolver = z3.Solver()
     zsolver.set('arith.solver', 6)
@@ -301,33 +332,41 @@ def ind_gen(filename, lits_to_keep , drop_all = False):
                 inducted_cube.append(cube[i])
         #validate
         log.info("FINAL CUBE:\n%s", z3.And(inducted_cube))
-        before_check = time.time()
+        before_gen = time.time()
         res = generalizer.check_inductive(inducted_cube, active_lvl)
-        after_check = time.time()
+        after_gen = time.time()
         log.info(res)
         assert(res==z3.unsat)
-        del edb
-        del zsolver
-        return {"useful": generalizer.useful_time, "wasted": generalizer.wasted_time, "lits_to_keep": generalizer.lits_to_keep, "checking_time": after_check - before_check}
-
     else:
         before_gen = time.time()
-        inducted_cube = generalizer.generalize(cube, active_lvl)
+        inducted_cube = generalizer.generalize(copy.deepcopy(cube), active_lvl)
         after_gen = time.time()
         #validate
         log.info("FINAL CUBE:\n%s", z3.And(inducted_cube))
         res = generalizer.check_inductive(inducted_cube, active_lvl)
         log.info(res)
         assert(res==z3.unsat)
-        del edb
-        del zsolver
-        return {"useful": generalizer.useful_time, "wasted": generalizer.wasted_time, "lits_to_keep": generalizer.lits_to_keep, "ind_gen_time": after_gen - before_gen}
+
+    #visualization
+    if vis:
+        for l in cube:
+            if l in inducted_cube:
+                print(colored("||\t"+str(l), 'green'))
+            else:
+                print(colored("||\t"+str(l), 'red'))
+    #generate dataset
+    if vocab is not None:
+        vocab = gen_datapoints(cube, inducted_cube, vocab, filename)
+
+    del edb
+    del zsolver
+    return {"useful": generalizer.useful_time, "wasted": generalizer.wasted_time, "lits_to_keep": generalizer.lits_to_keep, "ind_gen_time": after_gen - before_gen}
 
 def powerset(policy):
     "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
     return chain.from_iterable(combinations(policy, r) for r in range(len(policy)+1))
 
-def ind_gen_folder(folder, policy_file, use_powerset):
+def ind_gen_folder(folder, policy_file, use_powerset, vis, vocab):
     total_useful = 0
     total_wasted = 0
     running_times = []
@@ -338,12 +377,11 @@ def ind_gen_folder(folder, policy_file, use_powerset):
     queries = glob.glob(folder+"/*.smt2")
     for q in queries:
         print(q)
-        base_policy = policy[q]
-        print("BASE POLICY:%s"%str(base_policy))
-        res = ind_gen(q, base_policy, drop_all = True)
-        drop_all_runtime = res["checking_time"]
-        print("DROPPING ALL AT ONE:", drop_all_runtime)
         if q in policy:
+            base_policy = policy[q]
+            print("BASE POLICY:%s"%str(base_policy))
+            res = ind_gen(q, base_policy, drop_all = True)
+            print("DROPPING ALL AT ONE:", res["ind_gen_time"])
             if use_powerset:
                 power_policies  = list(powerset(base_policy))
                 print(power_policies)
@@ -351,7 +389,7 @@ def ind_gen_folder(folder, policy_file, use_powerset):
                 for p in power_policies:
                     lits_to_keep = sorted(list(p))
                     #has to parse a copy of the lits_to_keep
-                    res = ind_gen(q, lits_to_keep[:])
+                    res = ind_gen(q, lits_to_keep[:], vocab = vocab, vis = vis)
                     log.info("Trying %s in %s"%(str(lits_to_keep), str(res["ind_gen_time"])))
                     total_useful += res["useful"]
                     total_wasted += res["wasted"]
@@ -361,12 +399,12 @@ def ind_gen_folder(folder, policy_file, use_powerset):
                 print(sorted_res)
                 base_policy = tuple(sorted(base_policy))
                 best_policy = sorted_res[0][0]
-                running_times.append({"best": sorted_res[0][1], "best_policy": sorted_res[0][0], "base_policy": base_policy, "drop_all": drop_all_runtime})
+                running_times.append({"query": q, "best": sorted_res[0][1], "best_policy": sorted_res[0][0], "base_policy": base_policy, "drop_all": drop_all_runtime, "full_run": str(sorted_res)})
                 if base_policy != best_policy:
                     print("WARNING: not the best policy. Best: %s. Base: %s"%(best_policy, base_policy))
 
             else:
-                res = ind_gen(q, policy[q])
+                res = ind_gen(q, policy[q], vis = vis)
                 total_useful += res["useful"]
                 total_wasted +=res["wasted"]
                 policy[q] = res["lits_to_keep"]
@@ -382,22 +420,31 @@ def ind_gen_folder(folder, policy_file, use_powerset):
         json.dump(policy, f, indent = 4)
     with open(os.path.join(folder, "running_times.json"), "w") as f:
         json.dump(running_times, f, indent = 4)
+    if gen_dataset:
+        with open(os.path.join(folder, "vocab.json"), "w") as f:
+            json.dump(vocab)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-input', help='could be a smt2 file or a folder')
     parser.add_argument('-policy', help='a json policy file')
     parser.add_argument("-l", "--log", dest="logLevel", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], default='CRITICAL', help="Set the logging level")
     parser.add_argument('-powerset', action='store_true')
+    parser.add_argument('-vis', action='store_true')
+    parser.add_argument('-gen_dataset', action='store_true')
     args = parser.parse_args()
     print(args.logLevel)
     print(getattr(logging, args.logLevel))
     log = logging.getLogger(__name__)
     log.setLevel(getattr(logging, args.logLevel))
     # logging.basicConfig(level=getattr(logging, args.logLevel))
+    if args.gen_dataset:
+        vocab = Du.Vocab()
+    else:
+        vocab = None
     if os.path.isdir(args.input):
-        ind_gen_folder(args.input, args.policy, args.powerset)
+        ind_gen_folder(args.input, args.policy, args.powerset, args.vis, vocab = vocab)
     elif os.path.isfile(args.input):
-        ind_gen(args.input, [])
+        ind_gen(filename = args.input, lits_to_keep = [] , vocab = vocab, drop_all = False, vis = args.vis)
     else:
         print("not a file or folder")
    
