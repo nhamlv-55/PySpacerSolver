@@ -286,11 +286,8 @@ def gen_datapoints(cube, inducted_cube, vocab, filename):
             else:
                 label = 2
 
-            print("C")
             C_tree = Du.ast_to_node(z3.And(cube), vocab)
-            print("La")
             L_a_tree = Du.ast_to_node(cube[i], vocab)
-            print("Lb")
             L_b_tree = Du.ast_to_node(cube[j], vocab)
 
             datapoint = {"C_tree": C_tree.to_json(), "L_a_tree": L_a_tree.to_json(), "L_b_tree": L_b_tree.to_json(), "label": label}
@@ -375,7 +372,7 @@ def ind_gen_folder(folder, policy_file, use_powerset, vis, vocab):
         with open(policy_file, "r") as f:
             policy = json.load(f)
     queries = glob.glob(folder+"/*.smt2")
-    for q in queries:
+    for q in queries[:10]:
         print(q)
         if q in policy:
             base_policy = policy[q]
@@ -410,7 +407,7 @@ def ind_gen_folder(folder, policy_file, use_powerset, vis, vocab):
                 policy[q] = res["lits_to_keep"]
 
         else:
-            res = ind_gen(q, [])
+            res = ind_gen(q, [], vocab = vocab, vis = vis)
             total_useful += res["useful"]
             total_wasted +=res["wasted"]
             policy[q] = res["lits_to_keep"]
@@ -420,9 +417,8 @@ def ind_gen_folder(folder, policy_file, use_powerset, vis, vocab):
         json.dump(policy, f, indent = 4)
     with open(os.path.join(folder, "running_times.json"), "w") as f:
         json.dump(running_times, f, indent = 4)
-    if gen_dataset:
-        with open(os.path.join(folder, "vocab.json"), "w") as f:
-            json.dump(vocab)
+    if vocab is not None:
+        vocab.save(os.path.join(folder, "vocab.json"))
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-input', help='could be a smt2 file or a folder')
