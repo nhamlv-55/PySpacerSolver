@@ -41,5 +41,32 @@
     "Exp2/ind_gen_files/pool_solver_vsolver#0_24.smt2.with_lemma.smt2": [
         1,
         4
+    ],
+    "Exp2/ind_gen_files/pool_solver_vsolver#0_2.smt2.with_lemma.smt2": [
+        0,
+        1
+    ],
+    "Exp2/ind_gen_files/pool_solver_vsolver#0_20.smt2.with_lemma.smt2": [
+        0,
+        1,
+        5
+    ],
+    "Exp2/ind_gen_files/pool_solver_vsolver#0_5.smt2.with_lemma.smt2": [
+        1
+    ],
+    "Exp2/ind_gen_files/pool_solver_vsolver#0_0.smt2.with_lemma.smt2": [
+        2,
+        3
+    ],
+    "Exp2/ind_gen_files/pool_solver_vsolver#0_22.smt2.with_lemma.smt2": [
+        0,
+        1,
+        4
+    ],
+    "Exp2/ind_gen_files/pool_solver_vsolver#0_19.smt2.with_lemma.smt2": [
+        0,
+        1,
+        2,
+        3
     ]
 }
