@@ -277,7 +277,9 @@ class InductiveGeneralizer(object):
 
 def ind_gen(filename, lits_to_keep , dataset, drop_all = False, vis = False):
     '''
+    filename: filename
     lits_to_keep: a list of literal that we skip checking (== will be kept unless they are not in the unsat core)
+    dataset: the dataset object
     drop_all: whether we drop literals one by one or all at once
     vis: whether to dump a ind_gen visualization
     '''
@@ -286,6 +288,7 @@ def ind_gen(filename, lits_to_keep , dataset, drop_all = False, vis = False):
     zsolver.set('arith.solver', 6)
     edb = ExprDb(filename)
     cube = edb.get_cube()
+    cube = z3.simplify(cube)
     active_lvl = edb.get_active_lvl()
     log.info("PARSED CUBE:\n %s", cube)
     log.info("ACTIVATE LVL:\n %d", active_lvl)
@@ -352,7 +355,7 @@ def ind_gen_folder(folder, policy_file, use_powerset, vis, dataset):
         if q in policy:
             base_policy = policy[q]
             print("BASE POLICY:%s"%str(base_policy))
-            res = ind_gen(q, base_policy, drop_all = True)
+            res = ind_gen(q, base_policy, dataset = dataset, vis = vis, drop_all = True)
             print("DROPPING ALL AT ONE:", res["ind_gen_time"])
             if use_powerset:
                 power_policies  = list(powerset(base_policy))
@@ -376,7 +379,7 @@ def ind_gen_folder(folder, policy_file, use_powerset, vis, dataset):
                     print("WARNING: not the best policy. Best: %s. Base: %s"%(best_policy, base_policy))
 
             else:
-                res = ind_gen(q, policy[q], vis = vis)
+                res = ind_gen(q, policy[q], dataset = dataset, vis = vis)
                 total_useful += res["useful"]
                 total_wasted +=res["wasted"]
                 policy[q] = res["lits_to_keep"]
@@ -394,7 +397,7 @@ def ind_gen_folder(folder, policy_file, use_powerset, vis, dataset):
         json.dump(running_times, f, indent = 4)
     if dataset is not None:
         dataset.save_vocab(folder)
-        dataset.dump_dataset(folder)
+        # dataset.dump_dataset(folder)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-input', help='could be a smt2 file or a folder')
@@ -409,15 +412,23 @@ if __name__ == '__main__':
     log = logging.getLogger(__name__)
     log.setLevel(getattr(logging, args.logLevel))
     # logging.basicConfig(level=getattr(logging, args.logLevel))
-    if args.gen_dataset:
-        dataset = Du.Dataset()
-    else:
-        dataset = None
-
+    dataset = None
     if os.path.isdir(args.input):
+        if args.gen_dataset:
+            dataset = Du.Dataset(os.path.join(args.input, "ind_gen_vis.html"))
+        else:
+            dataset = None
         ind_gen_folder(args.input, args.policy, args.powerset, args.vis, dataset = dataset)
     elif os.path.isfile(args.input):
+        if args.gen_dataset:
+            dataset = Du.Dataset(args.input+ "ind_gen_vis.html")
+        else:
+            dataset = None
+
         ind_gen(filename = args.input, lits_to_keep = [] , dataset = dataset, drop_all = False, vis = args.vis)
     else:
         print("not a file or folder")
    
+
+    if dataset is not None:
+        dataset.dump_html()
