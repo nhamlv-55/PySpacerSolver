@@ -288,7 +288,6 @@ def ind_gen(filename, lits_to_keep , dataset, drop_all = False, vis = False):
     zsolver.set('arith.solver', 6)
     edb = ExprDb(filename)
     cube = edb.get_cube()
-    cube = z3.simplify(cube)
     active_lvl = edb.get_active_lvl()
     log.info("PARSED CUBE:\n %s", cube)
     log.info("ACTIVATE LVL:\n %d", active_lvl)
