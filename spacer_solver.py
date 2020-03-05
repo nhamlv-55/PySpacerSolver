@@ -8,8 +8,7 @@ import json
 import time
 from itertools import chain, combinations
 import copy
-from Doping.PySpacerSolver.utils import *
-import Doping.utils.utils as Du
+import Doping.PySpacerSolver.utils as DPu
 class SpacerSolverProxyDb(object):
     def __init__(self, proxies_db):
         #map from proxy_lit to expr. Note that there maybe duplicated exprs
@@ -333,7 +332,7 @@ def ind_gen(filename, lits_to_keep , dataset, drop_all = False, vis = False):
 
     #visualization
     if vis:
-        visualize(cube, inducted_cube)
+        DPu.visualize(cube, inducted_cube)
     #generate dataset
     if dataset is not None:
         dataset.add_dp(cube, inducted_cube, filename)
@@ -341,10 +340,6 @@ def ind_gen(filename, lits_to_keep , dataset, drop_all = False, vis = False):
     del edb
     del zsolver
     return {"useful": generalizer.useful_time, "wasted": generalizer.wasted_time, "lits_to_keep": generalizer.lits_to_keep, "ind_gen_time": after_gen - before_gen}
-
-def powerset(policy):
-    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
-    return chain.from_iterable(combinations(policy, r) for r in range(len(policy)+1))
 
 def ind_gen_folder(folder, policy_file, use_powerset, vis, dataset):
     total_useful = 0
@@ -363,7 +358,7 @@ def ind_gen_folder(folder, policy_file, use_powerset, vis, dataset):
             res = ind_gen(q, base_policy, dataset = dataset, vis = vis, drop_all = True)
             print("DROPPING ALL AT ONE:", res["ind_gen_time"])
             if use_powerset:
-                power_policies  = list(powerset(base_policy))
+                power_policies  = list(DPu.powerset(base_policy))
                 print(power_policies)
                 results = {}
                 for p in power_policies:
@@ -421,11 +416,11 @@ if __name__ == '__main__':
     policy_file = args.policy
     if os.path.isdir(args.input):
         if args.gen_dataset:
-            dataset = Du.Dataset(os.path.join(args.input, "ind_gen_vis.html"))
+            dataset = DPu.Dataset(os.path.join(args.input, "ind_gen_vis.html"))
         ind_gen_folder(args.input, policy_file, args.powerset, args.vis, dataset = dataset)
     elif os.path.isfile(args.input):
         if args.gen_dataset:
-            dataset = Du.Dataset(args.input+ "ind_gen_vis.html")
+            dataset = DPu.Dataset(args.input+ "ind_gen_vis.html")
         lits_to_keep = []
         drop_all = False
         try:
