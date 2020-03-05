@@ -300,7 +300,8 @@ class Dataset:
 
     def check_lit_conflict(self, cube, inducted_cube, filename):
         '''
-        Check if exists 2 lits that are the same after tokenization, but one is red and one is blue
+        Check if exists 2 lits that are the same after tokenization, but one is red and one is blue.
+        Also returns a list of trees. Each tree is a conversion of a literal in the cube.
         '''
         self.print2html("Checking for lit conflict")
         
@@ -308,14 +309,18 @@ class Dataset:
         conflict = False
         blue_trees = set()
         red_trees = set()
+        all_lit_trees = []
         for lit in cube:
+            lit_tree = ast_to_tree(lit, self.vocab)
+            all_lit_trees.append(lit_tree)
             if lit in inducted_cube:
-                blue_trees.add(ast_to_tree(lit, self.vocab).rewrite())
+                blue_trees.add(lit_tree.rewrite())
             else:
-                red_trees.add(ast_to_tree(lit, self.vocab).rewrite())
+                red_trees.add(lit_tree.rewrite())
 
-        for lit in cube:
-            lit_tree = ast_to_tree(lit, self.vocab).rewrite()
+        for i in range(len(cube)):
+            lit = cube[i]
+            lit_tree = all_lit_trees[i].rewrite()
             if lit in inducted_cube and lit_tree not in red_trees:
                 self.print2html("%s =====> %s"%(lit, lit_tree), "blue")
             elif lit in inducted_cube and lit_tree in red_trees:
@@ -328,7 +333,7 @@ class Dataset:
                 self.print2html("%s =====> %s"%(lit, lit_tree), "red")
 
         self.print2html("----------------------------")
-        return conflict
+        return conflict, all_lit_trees
 
     def add_dp(self, cube, inducted_cube, filename):
         if len(cube)<=1:
@@ -345,7 +350,8 @@ class Dataset:
         visualize(cube, inducted_cube, self.html_vis_page)
 
         #Check for conflict
-        if self.check_lit_conflict(cube, inducted_cube, filename):
+        conflict, all_lit_trees = self.check_lit_conflict(cube, inducted_cube, filename)
+        if conflict:
             self.print2html("There is a self-conflict. Drop this cube")
             return
 
@@ -353,6 +359,8 @@ class Dataset:
 
         last_collision_file = None
 
+        #TODO: manually construct C_tree based on all L_tree (should save half the time)
+        C_tree = ast_to_tree(z3.And(cube), self.vocab)
         for i in range(len(cube)):
 
             for j in range(i+1, len(cube)):
@@ -364,9 +372,8 @@ class Dataset:
                 else:
                     label = 1
 
-                C_tree = ast_to_tree(z3.And(cube), self.vocab)
-                L_a_tree = ast_to_tree(cube[i], self.vocab)
-                L_b_tree = ast_to_tree(cube[j], self.vocab)
+                L_a_tree = all_lit_trees[i]
+                L_b_tree = all_lit_trees[j]
 
                 dp_filename = filename+ "."+ str(i)+ "."+ str(j)+ ".dp.json"
                 X = (C_tree.rewrite(), L_a_tree.rewrite(), L_b_tree.rewrite())
