@@ -4,7 +4,7 @@ from Doping.pytorchtreelstm.treelstm import calculate_evaluation_orders
 import z3
 import json
 import torch
-
+import numpy as np
 def html_colored(text, color = "black"):
     text = text.replace("<", "&lt;")
     text = text.replace(">", "&gt;")
@@ -39,6 +39,26 @@ class HtmlVisPage:
             f.write(self.header)
             f.writelines(self.body)
             f.write(self.footer)
+
+class LocalConsEmb:
+    def __init__(self, emb_size = 30):
+        self.id2const = {}
+        self.const2id = {}
+        self.const_size = 0
+        self.emb = np.random.normal(size=(100, emb_size))
+    def add_const(self, const):
+        '''add a const to vocab and return its id'''
+        if const in self.const2id:
+            idx = self.const2id[const]
+            return idx, self.emb[idx]
+        else:
+            idx = self.const_size
+            self.const2id[const] = idx
+            self.id2const[idx] = const
+            self.const_size+=1
+            return idx, self.emb[idx]
+
+
 class Vocab:
     def __init__(self):
         self.id2w = {}
@@ -48,10 +68,6 @@ class Vocab:
         self.id2s = {}
         self.s2id = {}
         self.sort_size = 0
-
-        self.id2const = {}
-        self.const2id = {}
-        self.const_size = 0
 
         #add constant
         self.add_token("<ROOT>")
@@ -82,23 +98,12 @@ class Vocab:
             self.sort_size+=1
             return self.s2id[sort]
 
-    def add_const(self, const):
-        '''add a const to vocab and return its id'''
-        if const in self.const2id:
-            return self.const2id[const]
-        else:
-            idx = self.const_size
-            self.const2id[const] = idx
-            self.id2const[idx] = const
-            self.const_size+=1
-            return self.const2id[const]
-
     def dump(self):
         print("ID2W:", self.id2w)
         print("W2ID:", self.w2id)
 
     def save(self, filename):
-        vocab = {"id2w": self.id2w, "w2id": self.w2id, "size": self.size, "id2s": self.id2s, "s2id": self.s2id, "sort_size": self.sort_size, "const2id": self.const2id, "id2const": self.id2const, "const_size": self.const_size}
+        vocab = {"id2w": self.id2w, "w2id": self.w2id, "size": self.size, "id2s": self.id2s, "s2id": self.s2id, "sort_size": self.sort_size}
         with open(filename, "w") as f:
             json.dump(vocab, f)
 class Node:
@@ -109,9 +114,10 @@ class Node:
         self._sort_id = -1
         self._children = list()
         self._sort = None
+        self._const_emb = [0]*30
         self._num_child = 0
         self._node_idx = -1
-
+        
     def keys(self):
         return ["children", "index", "features"]
 
@@ -125,10 +131,12 @@ class Node:
         elif key =="index": return self.set_node_idx(value)
 
 
-    def set_token(self, ast_node, vocab):
+    def set_token(self, ast_node, vocab, local_emb = None):
         if z3.is_rational_value(ast_node):
             self._token = "<NUMBER>"
-            _ = vocab.add_const(str(ast_node))
+            if local_emb is not None:
+                idx, emb_val = local_emb.add_const(str(ast_node))
+                self._const_emb = emb_val
             self._token_id = vocab.add_token(self._token)
             self._raw_expr = str(ast_node)
         else:
@@ -199,7 +207,7 @@ class Node:
 
     def rewrite(self):
         if self._num_child==0:
-            return "%s|%s"%(self._token, self._sort)
+            return "%s|%s|%s"%(self._token, self._sort, str(self._const_emb[:5]))
         else:
             childs = [child.rewrite() for child in self._children]
             childs = " ".join(childs)
@@ -209,14 +217,14 @@ class Node:
     def get_feat(self):
         return [self._token_id, self._sort_id]
 
-def ast_to_node(ast_node, vocab):
+def ast_to_node(ast_node, vocab, local_const_emb):
     node = Node()
-    node.set_token(ast_node, vocab)
+    node.set_token(ast_node, vocab, local_const_emb)
     node.set_sort(ast_node, vocab)
     if ast_node.num_args == 0:
         return node
     else:
-        node.set_children([ast_to_node(child, vocab) for child in ast_node.children()])
+        node.set_children([ast_to_node(child, vocab, local_const_emb) for child in ast_node.children()])
         return node
 
 def rootify(ast_node, vocab):
@@ -228,8 +236,8 @@ def rootify(ast_node, vocab):
     root_node.set_children([ast_node])
     return root_node
 
-def ast_to_tree(ast_node, vocab):
-    return rootify(ast_to_node(ast_node, vocab), vocab)
+def ast_to_tree(ast_node, vocab, local_const_emb):
+    return rootify(ast_to_node(ast_node, vocab, local_const_emb), vocab)
 
 def _label_node_index(node, n=0):
     node['index'] = n
@@ -298,7 +306,7 @@ class Dataset:
             new_cube.append(self.normalize(l))
         return new_cube
 
-    def check_lit_conflict(self, cube, inducted_cube, filename):
+    def check_lit_conflict(self, cube, inducted_cube, local_const_emb):
         '''
         Check if exists 2 lits that are the same after tokenization, but one is red and one is blue.
         Also returns a list of trees. Each tree is a conversion of a literal in the cube.
@@ -311,7 +319,7 @@ class Dataset:
         red_trees = set()
         all_lit_trees = []
         for lit in cube:
-            lit_tree = ast_to_tree(lit, self.vocab)
+            lit_tree = ast_to_tree(lit, self.vocab, local_const_emb)
             all_lit_trees.append(lit_tree)
             if lit in inducted_cube:
                 blue_trees.add(lit_tree.rewrite())
@@ -336,6 +344,7 @@ class Dataset:
         return conflict, all_lit_trees
 
     def add_dp(self, cube, inducted_cube, filename):
+        local_const_emb = LocalConsEmb()
         if len(cube)<=1:
             return
         #Normalize before doing anything
@@ -350,7 +359,7 @@ class Dataset:
         visualize(cube, inducted_cube, self.html_vis_page)
 
         #Check for conflict
-        conflict, all_lit_trees = self.check_lit_conflict(cube, inducted_cube, filename)
+        conflict, all_lit_trees = self.check_lit_conflict(cube, inducted_cube, local_const_emb)
         if conflict:
             self.print2html("There is a self-conflict. Drop this cube")
             return
@@ -360,7 +369,7 @@ class Dataset:
         last_collision_file = None
 
         #TODO: manually construct C_tree based on all L_tree (should save half the time)
-        C_tree = ast_to_tree(z3.And(cube), self.vocab)
+        C_tree = ast_to_tree(z3.And(cube), self.vocab, local_const_emb)
         for i in range(len(cube)):
 
             for j in range(i+1, len(cube)):
