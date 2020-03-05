@@ -215,7 +215,7 @@ class Node:
             
 
     def get_feat(self):
-        return [self._token_id, self._sort_id]
+        return [self._token_id, self._sort_id, self._const_emb]
 
 def ast_to_node(ast_node, vocab, local_const_emb):
     node = Node()
