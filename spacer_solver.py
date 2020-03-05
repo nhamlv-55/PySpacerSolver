@@ -422,24 +422,19 @@ if __name__ == '__main__':
     if os.path.isdir(args.input):
         if args.gen_dataset:
             dataset = Du.Dataset(os.path.join(args.input, "ind_gen_vis.html"))
-        else:
-            dataset = None
         ind_gen_folder(args.input, policy_file, args.powerset, args.vis, dataset = dataset)
     elif os.path.isfile(args.input):
         if args.gen_dataset:
             dataset = Du.Dataset(args.input+ "ind_gen_vis.html")
-        else:
-            dataset = None
         lits_to_keep = []
         drop_all = False
         try:
-            if policy_file is not None:
-                with open(policy_file, "r") as f:
-                    policy = json.load(f)
-                    lits_to_keep = policy[args.input]
-                    drop_all = True
+            with open(policy_file, "r") as f:
+                policy = json.load(f)
+                lits_to_keep = policy[args.input]
+                drop_all = True
         except Exception as e:
-            print("Policy doesn't exists or this file hasn't been seen before")
+            print("Policy doesn't exist or this file hasn't been seen before")
         ind_gen(filename = args.input, lits_to_keep = lits_to_keep , dataset = dataset, drop_all = drop_all, vis = args.vis)
     else:
         print("not a file or folder")
