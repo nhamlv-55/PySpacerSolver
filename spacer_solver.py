@@ -310,11 +310,17 @@ def ind_gen(filename, lits_to_keep , dataset, drop_all = False, vis = False):
                 inducted_cube.append(cube[i])
         #validate
         log.info("FINAL CUBE:\n%s", z3.And(inducted_cube))
-        before_gen = time.time()
-        res = generalizer.check_inductive(inducted_cube, active_lvl)
-        after_gen = time.time()
-        log.info(res)
-        assert(res==z3.unsat)
+        #TODO: add flag to switch between checking the final cube or not
+        if False:
+            before_gen = time.time()
+            res = generalizer.check_inductive(inducted_cube, active_lvl)
+            after_gen = time.time()
+            log.info(res)
+            assert(res==z3.unsat)
+        else:
+            print("skip checking result")
+            before_gen = time.time()
+            after_gen = time.time()
     else:
         before_gen = time.time()
         inducted_cube = generalizer.generalize(copy.deepcopy(cube), active_lvl)
@@ -412,19 +418,29 @@ if __name__ == '__main__':
     log.setLevel(getattr(logging, args.logLevel))
     # logging.basicConfig(level=getattr(logging, args.logLevel))
     dataset = None
+    policy_file = args.policy
     if os.path.isdir(args.input):
         if args.gen_dataset:
             dataset = Du.Dataset(os.path.join(args.input, "ind_gen_vis.html"))
         else:
             dataset = None
-        ind_gen_folder(args.input, args.policy, args.powerset, args.vis, dataset = dataset)
+        ind_gen_folder(args.input, policy_file, args.powerset, args.vis, dataset = dataset)
     elif os.path.isfile(args.input):
         if args.gen_dataset:
             dataset = Du.Dataset(args.input+ "ind_gen_vis.html")
         else:
             dataset = None
-
-        ind_gen(filename = args.input, lits_to_keep = [] , dataset = dataset, drop_all = False, vis = args.vis)
+        lits_to_keep = []
+        drop_all = False
+        try:
+            if policy_file is not None:
+                with open(policy_file, "r") as f:
+                    policy = json.load(f)
+                    lits_to_keep = policy[args.input]
+                    drop_all = True
+        except Exception as e:
+            print("Policy doesn't exists or this file hasn't been seen before")
+        ind_gen(filename = args.input, lits_to_keep = lits_to_keep , dataset = dataset, drop_all = drop_all, vis = args.vis)
     else:
         print("not a file or folder")
    
