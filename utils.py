@@ -5,6 +5,8 @@ import z3
 import json
 import torch
 import numpy as np
+import os
+
 def html_colored(text, color = "black"):
     text = text.replace("<", "&lt;")
     text = text.replace(">", "&gt;")
@@ -50,13 +52,13 @@ class LocalConsEmb:
         '''add a const to vocab and return its id'''
         if const in self.const2id:
             idx = self.const2id[const]
-            return idx, self.emb[idx]
+            return idx, list(self.emb[idx])
         else:
             idx = self.const_size
             self.const2id[const] = idx
             self.id2const[idx] = const
             self.const_size+=1
-            return idx, self.emb[idx]
+            return idx, list(self.emb[idx])
 
 
 class Vocab:
@@ -215,7 +217,9 @@ class Node:
             
 
     def get_feat(self):
-        return [self._token_id, self._sort_id, self._const_emb]
+        feat = [self._token_id, self._sort_id]
+        feat.extend(self._const_emb)
+        return feat
 
 def ast_to_node(ast_node, vocab, local_const_emb):
     node = Node()
@@ -239,12 +243,12 @@ def rootify(ast_node, vocab):
 def ast_to_tree(ast_node, vocab, local_const_emb):
     return rootify(ast_to_node(ast_node, vocab, local_const_emb), vocab)
 
-def _label_node_index(node, n=0):
+def _label_node_index(node, n):
     node['index'] = n
     for child in node['children']:
         n += 1
-        _label_node_index(child, n)
-
+        n = _label_node_index(child, n)
+    return n
 
 def _gather_node_attributes(node, key):
     if key in node.keys():
@@ -267,7 +271,8 @@ def _gather_adjacency_list(node):
 def convert_tree_to_tensors(tree, device=torch.device('cuda')):
     # Label each node with its walk order to match nodes to feature tensor indexes
     # This modifies the original tree as a side effect
-    _label_node_index(tree)
+    n = 0
+    n = _label_node_index(tree, n)
     features = _gather_node_attributes(tree, 'features')
     adjacency_list = _gather_adjacency_list(tree)
 
