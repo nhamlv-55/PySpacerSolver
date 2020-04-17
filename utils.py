@@ -288,13 +288,16 @@ def convert_tree_to_tensors(tree, device=torch.device('cuda')):
     }
 
 class Dataset:
-    def __init__(self, html_vis_page = None):
+    def __init__(self, checkpoint = 500, folder = None, html_vis_page = None):
         self.vocab = Vocab()
         self.dataset = {}
         if html_vis_page is not None:
             self.html_vis_page = HtmlVisPage(html_vis_page)
         else:
             self.html_vis_page = None
+        #checkpoint: save the vocab after each n datapoints
+        self.checkpoint = checkpoint
+        self.folder = folder
 
     def print2html(self, s, color = "black"):
         print(s)
@@ -349,6 +352,8 @@ class Dataset:
         return conflict, all_lit_trees
 
     def add_dp(self, cube, inducted_cube, filename):
+        if len(self.dataset%self.checkpoint==0):
+            self.save_vocab(self.folder)
         local_const_emb = LocalConsEmb()
         if len(cube)<=1:
             return
