@@ -352,7 +352,7 @@ class Dataset:
         return conflict, all_lit_trees
 
     def add_dp(self, cube, inducted_cube, filename):
-        if len(self.dataset%self.checkpoint==0):
+        if len(self.dataset)%self.checkpoint==0:
             self.save_vocab(self.folder)
         local_const_emb = LocalConsEmb()
         if len(cube)<=1:

@@ -420,11 +420,11 @@ if __name__ == '__main__':
     limit = args.limit
     if os.path.isdir(args.input):
         if args.gen_dataset:
-            dataset = DPu.Dataset(os.path.join(args.input, "ind_gen_vis.html"))
-        ind_gen_folder(args.input, policy_file, args.powerset, args.vis, dataset = dataset, limit)
+            dataset = DPu.Dataset(folder = args.input, html_vis_page = os.path.join(args.input, "ind_gen_vis.html"))
+        ind_gen_folder(args.input, policy_file, args.powerset, args.vis, dataset = dataset, limit = limit)
     elif os.path.isfile(args.input):
         if args.gen_dataset:
-            dataset = DPu.Dataset(folder = args.input, html_vis_page = args.input+ "ind_gen_vis.html")
+            dataset = DPu.Dataset(folder = os.path.dirname(args.input) )
         lits_to_keep = []
         drop_all = False
         try:
