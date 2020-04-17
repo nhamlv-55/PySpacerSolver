@@ -341,7 +341,7 @@ def ind_gen(filename, lits_to_keep , dataset, drop_all = False, vis = False):
     del zsolver
     return {"useful": generalizer.useful_time, "wasted": generalizer.wasted_time, "lits_to_keep": generalizer.lits_to_keep, "ind_gen_time": after_gen - before_gen}
 
-def ind_gen_folder(folder, policy_file, use_powerset, vis, dataset):
+def ind_gen_folder(folder, policy_file, use_powerset, vis, dataset, limit):
     total_useful = 0
     total_wasted = 0
     running_times = []
@@ -350,7 +350,9 @@ def ind_gen_folder(folder, policy_file, use_powerset, vis, dataset):
         with open(policy_file, "r") as f:
             policy = json.load(f)
     queries = glob.glob(folder+"/*.smt2")
-    for q in queries:
+    no_of_q = len(queries)
+    limit = min(no_of_q, limit)
+    for q in queries[:limit]:
         print(q)
         if q in policy:
             base_policy = policy[q]
@@ -406,6 +408,7 @@ if __name__ == '__main__':
     parser.add_argument('-powerset', action='store_true')
     parser.add_argument('-vis', action='store_true')
     parser.add_argument('-gen_dataset', action='store_true')
+    parser.add_argument('-limit', type = int, default = 4000)
     args = parser.parse_args()
     print(args.logLevel)
     print(getattr(logging, args.logLevel))
@@ -414,13 +417,14 @@ if __name__ == '__main__':
     # logging.basicConfig(level=getattr(logging, args.logLevel))
     dataset = None
     policy_file = args.policy
+    limit = args.limit
     if os.path.isdir(args.input):
         if args.gen_dataset:
             dataset = DPu.Dataset(os.path.join(args.input, "ind_gen_vis.html"))
-        ind_gen_folder(args.input, policy_file, args.powerset, args.vis, dataset = dataset)
+        ind_gen_folder(args.input, policy_file, args.powerset, args.vis, dataset = dataset, limit)
     elif os.path.isfile(args.input):
         if args.gen_dataset:
-            dataset = DPu.Dataset(args.input+ "ind_gen_vis.html")
+            dataset = DPu.Dataset(folder = args.input, html_vis_page = args.input+ "ind_gen_vis.html")
         lits_to_keep = []
         drop_all = False
         try:
