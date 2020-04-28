@@ -336,7 +336,7 @@ def ind_gen(filename, lits_to_keep , dataset, drop_all = False, vis = False):
     #generate dataset
     if dataset is not None:
         dataset.add_dp(cube, inducted_cube, filename)
-
+        dataset.add_dp_to_X(inducted_cube, filename)
     del edb
     del zsolver
     return {"useful": generalizer.useful_time, "wasted": generalizer.wasted_time, "lits_to_keep": generalizer.lits_to_keep, "ind_gen_time": after_gen - before_gen}
@@ -399,6 +399,7 @@ def ind_gen_folder(folder, policy_file, use_powerset, vis, dataset, limit):
         json.dump(running_times, f, indent = 4)
     if dataset is not None:
         dataset.save_vocab(folder)
+        dataset.save_X_L(folder)
         # dataset.dump_dataset(folder)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
