@@ -201,6 +201,7 @@ class Node:
             return {"token": self._token, "token_id": self._token_id, "sort": self._sort, "sort_id": self._sort_id, "children": [], "expr": self._raw_expr, "features": self.get_feat()}
         else:
             return {"token": self._token, "token_id": self._token_id, "sort": self._sort, "sort_id": self._sort_id, "children": [child.to_json() for child in self._children], "expr": self._raw_expr, "features": self.get_feat()}
+
     def __str__(self):
         return json.dumps(self.to_json(), indent = 2)
 
@@ -217,15 +218,6 @@ class Node:
         feat = [self._token_id, self._sort_id]
         feat.extend(self._const_emb)
         return feat
-
-    def __str__(self):
-        current_token = "{}|{}".format(self._token, self._sort)
-        if self.num_child == 0:
-            return current_token
-        else:
-            children_str = " ".join(str(c) for c in self._children)
-            return "{} ({})"%(current_token, children_str)
-        
 
 def ast_to_node(ast_node, vocab, local_const_emb):
     node = Node()
@@ -304,6 +296,10 @@ class Dataset:
         #checkpoint: save the vocab after each n datapoints
         self.checkpoint = checkpoint
         self.folder = folder
+
+        #data for constructing matrix X
+        self.L = {}
+        self.X = {}
 
     def print2html(self, s, color = "black"):
         print(s)
@@ -419,9 +415,66 @@ class Dataset:
                 with open(dp_filename, "w") as f:
                     json.dump({"C_tree": C_tree.to_json(), "L_a_tree": L_a_tree.to_json(), "L_b_tree": L_b_tree.to_json(), "label": label}, f)
 
+
+    def add_dp_to_X(self, inducted_cube, filename):
+        """
+        Build the X matrix. Only the inducted cube is needed
+        """
+        #Normalize before doing anything
+        inducted_cube = self.normalize_cube(inducted_cube)
+        local_const_emb = LocalConsEmb()
+        folder = os.path.dirname(filename)
+        for i in range(len(inducted_cube)):
+            for j in range(i+1, len(inducted_cube)):
+                L_a_tree = ast_to_tree(inducted_cube[i], self.vocab, local_const_emb)
+                L_b_tree = ast_to_tree(inducted_cube[j], self.vocab, local_const_emb)
+
+                L_a_tree_str = L_a_tree.rewrite()
+                L_b_tree_str = L_b_tree.rewrite()
+
+                if L_a_tree_str not in self.L:
+                    self.L[L_a_tree_str]=len(self.L)
+                    with open(os.path.join(folder, str(self.L[L_a_tree_str])+".json"), "w") as f:
+                        json.dump(L_a_tree.to_json(), f)
+                if L_b_tree_str not in self.L:
+                    self.L[L_b_tree_str] = len(self.L)
+                    with open(os.path.join(folder, str(self.L[L_b_tree_str])+".json"), "w") as f:
+                        json.dump(L_b_tree.to_json(), f)
+
+                a_index = self.L[L_a_tree_str]
+                b_index = self.L[L_b_tree_str]
+
+                if (a_index, b_index) in self.X:
+                    self.X[(a_index, b_index)]+=1
+                    self.X[(b_index, a_index)]+=1
+                else:
+                    self.X[(a_index, b_index)]=1
+                    self.X[(b_index, a_index)]=1
+
     def save_vocab(self, folder):
         print("SAVING VOCAB")
         self.vocab.save(os.path.join(folder, "vocab.json"))
+
+    def save_X_L(self, folder):
+        with open(os.path.join(folder, "L.json"), "w") as L_file:
+            json.dump(self.L, L_file)
+
+        print(len(self.L))
+        print(len(self.X))
+
+        X_matrix = np.zeros((len(self.L), len(self.L)))
+        for k in self.X:
+            print(k)
+            i,j = k
+            print(i, j)
+            X_matrix[i][j] = self.X[k]
+
+        for row in X_matrix:
+            print(row)
+        with open(os.path.join(folder, "X.json"), "w") as X_file:
+            json.dump({"X": X_matrix.tolist()}, X_file)
+
+
 
     def dump_dataset(self, folder):
         pass
