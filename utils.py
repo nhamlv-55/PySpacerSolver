@@ -132,7 +132,6 @@ class Node:
         if key=="children": return self.set_children(value)
         elif key =="index": return self.set_node_idx(value)
 
-
     def set_token(self, ast_node, vocab, local_emb = None):
         if z3.is_rational_value(ast_node):
             self._token = "<NUMBER>"
@@ -145,8 +144,6 @@ class Node:
             self._token = ast_node.decl().name()
             self._token_id = vocab.add_token(self._token)
             self._raw_expr = str(ast_node)
-
-
 
     def set_sort(self, ast_node, vocab):
         if z3.is_const(ast_node):
@@ -220,6 +217,15 @@ class Node:
         feat = [self._token_id, self._sort_id]
         feat.extend(self._const_emb)
         return feat
+
+    def __str__(self):
+        current_token = "{}|{}".format(self._token, self._sort)
+        if self.num_child == 0:
+            return current_token
+        else:
+            children_str = " ".join(str(c) for c in self._children)
+            return "{} ({})"%(current_token, children_str)
+        
 
 def ast_to_node(ast_node, vocab, local_const_emb):
     node = Node()
