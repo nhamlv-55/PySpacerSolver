@@ -385,9 +385,13 @@ def ind_gen_folder(folder, policy_file, use_powerset, vis, dataset, limit):
                 total_useful += res["useful"]
                 total_wasted +=res["wasted"]
                 policy[q] = res["lits_to_keep"]
-
+            
+            if dataset is not None:
+                dataset.save_X_L(folder)
         else:
             res = ind_gen(q, [], dataset = dataset, vis = vis)
+            if dataset is not None:
+                dataset.save_X_L(folder)
             total_useful += res["useful"]
             total_wasted +=res["wasted"]
             policy[q] = res["lits_to_keep"]
@@ -399,7 +403,6 @@ def ind_gen_folder(folder, policy_file, use_powerset, vis, dataset, limit):
         json.dump(running_times, f, indent = 4)
     if dataset is not None:
         dataset.save_vocab(folder)
-        dataset.save_X_L(folder)
         # dataset.dump_dataset(folder)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
