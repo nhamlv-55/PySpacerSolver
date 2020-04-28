@@ -205,11 +205,14 @@ class Node:
     def __str__(self):
         return json.dumps(self.to_json(), indent = 2)
 
-    def rewrite(self):
+    def rewrite(self, write_emb = True):
         if self._num_child==0:
-            return "%s|%s|%s"%(self._token, self._sort, str(self._const_emb[:5]))
+            if write_emb:
+                return "%s|%s|%s"%(self._token, self._sort, str(self._const_emb[:5]))
+            else:
+                return "%s|%s"%(self._token, self._sort)
         else:
-            childs = [child.rewrite() for child in self._children]
+            childs = [child.rewrite(write_emb) for child in self._children]
             childs = " ".join(childs)
             return "(%s (%s))"%(self._token, childs)
             
@@ -429,8 +432,8 @@ class Dataset:
                 L_a_tree = ast_to_tree(inducted_cube[i], self.vocab, local_const_emb)
                 L_b_tree = ast_to_tree(inducted_cube[j], self.vocab, local_const_emb)
 
-                L_a_tree_str = L_a_tree.rewrite()
-                L_b_tree_str = L_b_tree.rewrite()
+                L_a_tree_str = L_a_tree.rewrite(write_emb = False)
+                L_b_tree_str = L_b_tree.rewrite(write_emb = False)
 
                 if L_a_tree_str not in self.L:
                     self.L[L_a_tree_str]=len(self.L)
