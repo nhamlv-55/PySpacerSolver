@@ -303,6 +303,9 @@ class Dataset:
         #data for constructing matrix X
         self.L = {}
         self.X = {}
+        #a counter to dump X.1.json, X.2.json, etc.
+        self.X_counter = 0
+        self.save_every = 10
 
     def print2html(self, s, color = "black"):
         print(s)
@@ -459,6 +462,9 @@ class Dataset:
         self.vocab.save(os.path.join(folder, "vocab.json"))
 
     def save_X_L(self, folder):
+        if self.X_counter%self.save_every !=1:
+            self.X_counter+=1
+            return
         with open(os.path.join(folder, "L.json"), "w") as L_file:
             json.dump(self.L, L_file)
 
@@ -467,16 +473,15 @@ class Dataset:
 
         X_matrix = np.zeros((len(self.L), len(self.L)))
         for k in self.X:
-            print(k)
             i,j = k
-            print(i, j)
             X_matrix[i][j] = self.X[k]
 
         for row in X_matrix:
             print(row)
-        with open(os.path.join(folder, "X.json"), "w") as X_file:
+        with open(os.path.join(folder, "X" + str(self.X_counter).zfill(5)+ ".json"), "w") as X_file:
             json.dump({"X": X_matrix.tolist()}, X_file)
 
+        self.X_counter+=1
 
 
     def dump_dataset(self, folder):
