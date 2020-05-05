@@ -439,14 +439,15 @@ class Dataset:
                 L_b_tree_str = L_b_tree.rewrite(write_emb = False)
 
                 if L_a_tree_str not in self.L:
-                    self.L[L_a_tree_str]=len(self.L)
-                    with open(os.path.join(folder, str(self.L[L_a_tree_str])+".json"), "w") as f:
-                        json.dump(L_a_tree.to_json(), f)
+                    a_index = len(self.L)
+                    self.L[L_a_tree_str]=a_index
+                    with open(os.path.join(folder, "lit_" + str(a_index)+".json"), "w") as f:
+                        json.dump({"index": a_index, "tree": L_a_tree.to_json()}, f)
                 if L_b_tree_str not in self.L:
-                    self.L[L_b_tree_str] = len(self.L)
-                    with open(os.path.join(folder, str(self.L[L_b_tree_str])+".json"), "w") as f:
-                        json.dump(L_b_tree.to_json(), f)
-
+                    b_index = len(self.L)
+                    self.L[L_b_tree_str]=b_index
+                    with open(os.path.join(folder, "lit_" + str(b_index)+".json"), "w") as f:
+                        json.dump({"index": b_index, "tree": L_b_tree.to_json()}, f)
                 a_index = self.L[L_a_tree_str]
                 b_index = self.L[L_b_tree_str]
 
@@ -461,10 +462,13 @@ class Dataset:
         print("SAVING VOCAB")
         self.vocab.save(os.path.join(folder, "vocab.json"))
 
-    def save_X_L(self, folder):
-        if self.X_counter%self.save_every !=1:
+    def save_X_L(self, folder, forced = False):
+        #if forced, save the dataset regardless of X_counter
+        if forced == False and self.X_counter%self.save_every !=1:
             self.X_counter+=1
             return
+
+
         with open(os.path.join(folder, "L.json"), "w") as L_file:
             json.dump(self.L, L_file)
 
