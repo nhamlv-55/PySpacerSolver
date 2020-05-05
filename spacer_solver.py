@@ -335,7 +335,7 @@ def ind_gen(filename, lits_to_keep , dataset, drop_all = False, vis = False):
         DPu.visualize(cube, inducted_cube)
     #generate dataset
     if dataset is not None:
-        dataset.add_dp(cube, inducted_cube, filename)
+        # dataset.add_dp(cube, inducted_cube, filename)
         dataset.add_dp_to_X(inducted_cube, filename)
     del edb
     del zsolver
@@ -350,6 +350,7 @@ def ind_gen_folder(folder, policy_file, use_powerset, vis, dataset, limit):
         with open(policy_file, "r") as f:
             policy = json.load(f)
     queries = glob.glob(folder+"/*.smt2")
+    queries = sorted(queries) 
     no_of_q = len(queries)
     limit = min(no_of_q, limit)
     for q in queries[:limit]:
