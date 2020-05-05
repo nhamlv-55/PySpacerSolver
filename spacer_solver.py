@@ -404,6 +404,7 @@ def ind_gen_folder(folder, policy_file, use_powerset, vis, dataset, limit):
         json.dump(running_times, f, indent = 4)
     if dataset is not None:
         dataset.save_vocab(folder)
+        dataset.save_X_L(folder, forced = True)
         # dataset.dump_dataset(folder)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
