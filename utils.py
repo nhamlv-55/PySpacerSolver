@@ -214,7 +214,7 @@ class Node:
         else:
             childs = [child.rewrite(write_emb) for child in self._children]
             childs = " ".join(childs)
-            return "(%s (%s))"%(self._token, childs)
+            return "%s|%s (%s)"%(self._token, self._sort, childs)
             
 
     def get_feat(self):
@@ -478,8 +478,27 @@ class Dataset:
 
         for row in X_matrix:
             print(row)
+
+        #calculating P
+        #P[i][j] = P(j|i)
+        P_matrix = np.zeros((len(self.L), len(self.L)))
+        for i in range(len(self.L)):
+            X_i = np.sum(X_matrix[i])
+            for j in range(len(self.L)):
+                if X_matrix[i][j]==0:
+                    P_matrix[i][j]=0
+                else:
+                    P_matrix[i][j] = X_matrix[i][j]/X_i
+        for row in P_matrix:
+            print(row)
+
+        
+        
         with open(os.path.join(folder, "X" + str(self.X_counter).zfill(5)+ ".json"), "w") as X_file:
             json.dump({"X": X_matrix.tolist()}, X_file)
+        with open(os.path.join(folder, "P" + str(self.X_counter).zfill(5)+ ".json"), "w") as P_file:
+            json.dump({"P": P_matrix.tolist()}, P_file)
+
 
         self.X_counter+=1
 
