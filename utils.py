@@ -42,7 +42,10 @@ class HtmlVisPage:
             f.writelines(self.body)
             f.write(self.footer)
 
-class LocalConsEmb:
+class ConsEmb:
+    """
+    use the value of the the constant and put it into an appropriate bin
+    """
     def __init__(self, emb_size = 30):
         self.id2const = {}
         self.const2id = {}
@@ -50,6 +53,25 @@ class LocalConsEmb:
         self.emb = np.random.normal(size=(100, emb_size))
     def add_const(self, const):
         '''add a const to vocab and return its id'''
+        if const in self.const2id:
+            idx = self.const2id[const]
+            return idx, list(self.emb[idx])
+        else:
+            idx = self.const_size
+            self.const2id[const] = idx
+            self.id2const[idx] = const
+            self.const_size+=1
+            return idx, list(self.emb[idx])
+
+class LocalConsEmb:
+    def __init__(self, emb_size = 30):
+        self.id2const = {}
+        self.const2id = {}
+        self.const_size = 0
+        self.emb = np.random.normal(size=(100, emb_size))
+    def add_const(self, const_node):
+        '''add a const to vocab and return its id'''
+        const = str(const_node)
         if const in self.const2id:
             idx = self.const2id[const]
             return idx, list(self.emb[idx])
@@ -136,7 +158,7 @@ class Node:
         if z3.is_rational_value(ast_node):
             self._token = "<NUMBER>"
             if local_emb is not None:
-                idx, emb_val = local_emb.add_const(str(ast_node))
+                idx, emb_val = local_emb.add_const(ast_node)
                 self._const_emb = emb_val
             self._token_id = vocab.add_token(self._token)
             self._raw_expr = str(ast_node)
@@ -144,6 +166,9 @@ class Node:
             self._token = ast_node.decl().name()
             self._token_id = vocab.add_token(self._token)
             self._raw_expr = str(ast_node)
+
+    
+
 
     def set_sort(self, ast_node, vocab):
         if z3.is_const(ast_node):
