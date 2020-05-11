@@ -247,7 +247,7 @@ class Node:
     def rewrite(self, write_emb = True):
         if self._num_child==0:
             if write_emb:
-                return "%s|%s|%s"%(self._token, self._sort, str(self._const_emb[:5]))
+                return "%s|%s|%s"%(self._token, self._sort, str(self._const_emb))
             else:
                 return "%s|%s"%(self._token, self._sort)
         else:
@@ -473,8 +473,8 @@ class Dataset:
                 L_a_tree = ast_to_tree(inducted_cube[i], self.vocab, local_const_emb)
                 L_b_tree = ast_to_tree(inducted_cube[j], self.vocab, local_const_emb)
 
-                L_a_tree_str = L_a_tree.rewrite(write_emb = False)
-                L_b_tree_str = L_b_tree.rewrite(write_emb = False)
+                L_a_tree_str = L_a_tree.rewrite(write_emb = True)
+                L_b_tree_str = L_b_tree.rewrite(write_emb = True)
 
                 if L_a_tree_str not in self.L:
                     a_index = len(self.L)
