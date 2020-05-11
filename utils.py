@@ -6,7 +6,7 @@ import json
 import torch
 import numpy as np
 import os
-
+import math
 def html_colored(text, color = "black"):
     text = text.replace("<", "&lt;")
     text = text.replace(">", "&gt;")
@@ -47,23 +47,37 @@ class ConsEmb:
     use the value of the the constant and put it into an appropriate bin
     """
     def __init__(self, emb_size = 30):
+        assert(emb_size%2==0)
         self.id2const = {}
         self.const2id = {}
-        self.const_size = 0
-        self.emb = np.random.normal(size=(100, emb_size))
-    def add_const(self, const):
+        #each constant is in the range 10^-mag_range to 10^mag_range
+        self.mag_range = int((emb_size - 2) / 2)
+        self.normalized_val = None
+    def add_const(self, const_node):
         '''add a const to vocab and return its id'''
-        if const in self.const2id:
-            idx = self.const2id[const]
-            return idx, list(self.emb[idx])
-        else:
-            idx = self.const_size
-            self.const2id[const] = idx
-            self.id2const[idx] = const
-            self.const_size+=1
-            return idx, list(self.emb[idx])
+        if const_node == 0:
+            return -1, [0]*(2*self.mag_range + 2)
+        num = const_node.numerator_as_long()
+        den = const_node.denominator_as_long()
+        # sign = num >= 0
+        val = float(num/den)
+        # print(num)
+        # print("------------------ = {}".format(val))
+        # print(den)
+
+        magnitude = int(math.log10(abs(val)))
+        magnitude_vector = [0]*(2*self.mag_range + 1)
+        magnitude_vector[self.mag_range+magnitude] = 1
+        
+        # print("magnitude", magnitude)
+        norm_val = val*(10**-magnitude)
+        # print(norm_val)
+        return -1, magnitude_vector + [norm_val]
 
 class LocalConsEmb:
+    """
+    randomized constant embedding
+    """
     def __init__(self, emb_size = 30):
         self.id2const = {}
         self.const2id = {}
@@ -131,14 +145,14 @@ class Vocab:
         with open(filename, "w") as f:
             json.dump(vocab, f)
 class Node:
-    def __init__(self):
+    def __init__(self, const_emb_size = 30):
         self._raw_expr = ""
         self._token = ""
         self._token_id = -1
         self._sort_id = -1
         self._children = list()
         self._sort = None
-        self._const_emb = [0]*30
+        self._const_emb = [0]*const_emb_size
         self._num_child = 0
         self._node_idx = -1
         
@@ -279,7 +293,6 @@ def _label_node_index(node, n):
 def _gather_node_attributes(node, key):
     if key in node.keys():
         features = [node[key]]
-
     for child in node['children']:
         features.extend(_gather_node_attributes(child, key))
     return features
@@ -453,7 +466,7 @@ class Dataset:
         """
         #Normalize before doing anything
         inducted_cube = self.normalize_cube(inducted_cube)
-        local_const_emb = LocalConsEmb()
+        local_const_emb = ConsEmb()
         folder = os.path.dirname(filename)
         for i in range(len(inducted_cube)):
             for j in range(i+1, len(inducted_cube)):
