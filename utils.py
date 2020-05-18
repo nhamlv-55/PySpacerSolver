@@ -7,6 +7,9 @@ import torch
 import numpy as np
 import os
 import math
+import matplotlib
+import matplotlib.pyplot as plt
+
 def html_colored(text, color = "black"):
     text = text.replace("<", "&lt;")
     text = text.replace(">", "&gt;")
@@ -532,6 +535,12 @@ class Dataset:
                     P_matrix[i][j] = X_matrix[i][j]/X_i
 
         if print_matrix:
+
+            fig, (ax0, ax1, ax2) = plt.subplots(1, 3)
+            im = ax0.imshow(X_matrix)
+            im = ax1.imshow(P_matrix)
+            im = ax2.imshow(X_matrix.astype(bool))
+            plt.savefig("XP.svg")
             for row in P_matrix:
                 print(row)
             for row in X_matrix:
