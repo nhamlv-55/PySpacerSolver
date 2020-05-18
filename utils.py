@@ -344,6 +344,7 @@ class Dataset:
         #data for constructing matrix X
         self.L = {}
         self.X = {}
+        self.L_freq = {}
         #a counter to dump X.1.json, X.2.json, etc.
         self.X_counter = 0
         self.save_every = 10
@@ -471,24 +472,33 @@ class Dataset:
         inducted_cube = self.normalize_cube(inducted_cube)
         local_const_emb = ConsEmb()
         folder = os.path.dirname(filename)
+        
+        #build all L_a_tree and L_a_tree_str
+        L_trees_str = []
+
+        for i in range(len(inducted_cube)):
+            L_a_tree = ast_to_tree(inducted_cube[i], self.vocab, local_const_emb)
+            L_a_tree_str = L_a_tree.rewrite(write_emb = True)
+            L_trees_str.append(L_a_tree_str)
+
+            if L_a_tree_str not in self.L:
+                a_index = len(self.L)
+                self.L[L_a_tree_str]=a_index
+                with open(os.path.join(folder, "lit_" + str(a_index)+".json"), "w") as f:
+                    json.dump({"index": a_index, "tree": L_a_tree.to_json()}, f)
+
+            #update L_freq: how many times a literal appears in the whole dataset
+            if L_a_tree_str not in self.L_freq:
+                self.L_freq[L_a_tree_str] = 1
+            else:
+                self.L_freq[L_a_tree_str] +=1
+
+        #collect co-occurance
         for i in range(len(inducted_cube)):
             for j in range(i+1, len(inducted_cube)):
-                L_a_tree = ast_to_tree(inducted_cube[i], self.vocab, local_const_emb)
-                L_b_tree = ast_to_tree(inducted_cube[j], self.vocab, local_const_emb)
+                L_a_tree_str = L_trees_str[i]
+                L_b_tree_str = L_trees_str[j]
 
-                L_a_tree_str = L_a_tree.rewrite(write_emb = True)
-                L_b_tree_str = L_b_tree.rewrite(write_emb = True)
-
-                if L_a_tree_str not in self.L:
-                    a_index = len(self.L)
-                    self.L[L_a_tree_str]=a_index
-                    with open(os.path.join(folder, "lit_" + str(a_index)+".json"), "w") as f:
-                        json.dump({"index": a_index, "tree": L_a_tree.to_json()}, f)
-                if L_b_tree_str not in self.L:
-                    b_index = len(self.L)
-                    self.L[L_b_tree_str]=b_index
-                    with open(os.path.join(folder, "lit_" + str(b_index)+".json"), "w") as f:
-                        json.dump({"index": b_index, "tree": L_b_tree.to_json()}, f)
                 a_index = self.L[L_a_tree_str]
                 b_index = self.L[L_b_tree_str]
 
@@ -504,15 +514,15 @@ class Dataset:
         self.vocab.save(os.path.join(folder, "vocab.json"))
 
     def save_X_L(self, folder, print_matrix = False, forced = False):
+        assert(len(self.L)==len(self.L_freq))
         #if forced, save the dataset regardless of X_counter
         if forced == False and self.X_counter%self.save_every !=1:
             self.X_counter+=1
             return
-
-
         with open(os.path.join(folder, "L.json"), "w") as L_file:
             json.dump(self.L, L_file)
-
+        with open(os.path.join(folder, "L_freq.json"), "w") as L_freq_file:
+            json.dump(self.L_freq, L_freq_file)
         print(len(self.L))
         print(len(self.X))
 
@@ -525,32 +535,30 @@ class Dataset:
 
         #calculating P
         #P[i][j] = P(j|i)
-        P_matrix = np.zeros((len(self.L), len(self.L)))
-        for i in range(len(self.L)):
-            X_i = np.sum(X_matrix[i])
-            for j in range(len(self.L)):
-                if X_matrix[i][j]==0:
-                    P_matrix[i][j]=0
-                else:
-                    P_matrix[i][j] = X_matrix[i][j]/X_i
+        #NOTE: disable for now. It would be more efficient to just calculate X. P can be derived by X.
+        # P_matrix = np.zeros((len(self.L), len(self.L)))
+        # for i in range(len(self.L)):
+        #     X_i = np.sum(X_matrix[i])
+        #     for j in range(len(self.L)):
+        #         if X_matrix[i][j]==0:
+        #             P_matrix[i][j]=0
+        #         else:
+        #             P_matrix[i][j] = X_matrix[i][j]/X_i
 
         if print_matrix:
 
-            fig, (ax0, ax1, ax2) = plt.subplots(1, 3)
-            im = ax0.imshow(X_matrix)
-            im = ax1.imshow(P_matrix)
-            im = ax2.imshow(X_matrix.astype(bool))
+            fig, (ax0, ax1) = plt.subplots(1, 2)
+            im = ax0.imshow(X_matrix, interpolation = None)
+            im = ax1.imshow(X_matrix.astype(bool), interpolation = None)
             plt.savefig("XP.svg")
-            for row in P_matrix:
-                print(row)
             for row in X_matrix:
                 print(row)
         
         
         with open(os.path.join(folder, "X" + str(self.X_counter).zfill(5)+ ".json"), "w") as X_file:
             json.dump({"X": X_matrix.tolist()}, X_file)
-        with open(os.path.join(folder, "P" + str(self.X_counter).zfill(5)+ ".json"), "w") as P_file:
-            json.dump({"P": P_matrix.tolist()}, P_file)
+        # with open(os.path.join(folder, "P" + str(self.X_counter).zfill(5)+ ".json"), "w") as P_file:
+            # json.dump({"P": P_matrix.tolist()}, P_file)
 
 
         self.X_counter+=1
