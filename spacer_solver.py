@@ -406,6 +406,36 @@ def ind_gen_folder(folder, policy_file, use_powerset, vis, dataset, limit):
         dataset.save_vocab(folder)
         dataset.save_X_L(folder, forced = True)
         # dataset.dump_dataset(folder)
+
+############CODE FOR GENERATING THE DATASET WITHOUT ANY CHECKING
+def skip_ind_gen(filename, dataset, vis = False):
+    '''
+    skip checking ind_gen and immediately add the cube to the Dataset. Use when we just want to generate the dataset as fast as possible
+    filename: filename
+    dataset: the dataset object
+    vis: whether to dump a ind_gen visualization
+    '''
+    edb = ExprDb(filename)
+    cube = edb.get_cube()
+    if vis:
+        DPu.visualize(cube, cube)
+    #generate dataset
+    if dataset is not None:
+        # dataset.add_dp(cube, inducted_cube, filename)
+        dataset.add_dp_to_X(cube, filename)
+    del edb
+def skip_ind_gen_folder(folder, vis, dataset, limit):
+    queries = glob.glob(folder+"/*.smt2")
+    queries = sorted(queries) 
+    no_of_q = len(queries)
+    limit = min(no_of_q, limit)
+    for q in queries[:limit]:
+        skip_ind_gen(q, dataset = dataset, vis = vis)
+        if dataset is not None:
+            dataset.save_X_L(folder)
+    if dataset is not None:
+        dataset.save_vocab(folder)
+        dataset.save_X_L(folder, print_matrix = True, forced = True)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-input', help='could be a smt2 file or a folder')
@@ -415,6 +445,7 @@ if __name__ == '__main__':
     parser.add_argument('-vis', action='store_true')
     parser.add_argument('-gen_dataset', action='store_true')
     parser.add_argument('-limit', type = int, default = 4000)
+    parser.add_argument('-skip-indgen', action='store_true')
     args = parser.parse_args()
     print(args.logLevel)
     print(getattr(logging, args.logLevel))
@@ -427,7 +458,10 @@ if __name__ == '__main__':
     if os.path.isdir(args.input):
         if args.gen_dataset:
             dataset = DPu.Dataset(folder = args.input, html_vis_page = os.path.join(args.input, "ind_gen_vis.html"))
-        ind_gen_folder(args.input, policy_file, args.powerset, args.vis, dataset = dataset, limit = limit)
+        if args.skip_indgen:
+            skip_ind_gen_folder(args.input, args.vis, dataset = dataset, limit = limit)
+        else:
+            ind_gen_folder(args.input, policy_file, args.powerset, args.vis, dataset = dataset, limit = limit)
     elif os.path.isfile(args.input):
         if args.gen_dataset:
             dataset = DPu.Dataset(folder = os.path.dirname(args.input) )
@@ -440,7 +474,10 @@ if __name__ == '__main__':
                 drop_all = True
         except Exception as e:
             print("Policy doesn't exist or this file hasn't been seen before")
-        ind_gen(filename = args.input, lits_to_keep = lits_to_keep , dataset = dataset, drop_all = drop_all, vis = args.vis)
+        if args.skip_indgen:
+            ind_gen(filename = args.input, dataset = dataset, vis = args.vis)
+        else:
+            ind_gen(filename = args.input, lits_to_keep = lits_to_keep , dataset = dataset, drop_all = drop_all, vis = args.vis)
     else:
         print("not a file or folder")
    
