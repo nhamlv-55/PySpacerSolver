@@ -71,7 +71,7 @@ def main():
                     current_lemma.to_smt2()
                     current_lemma = None
                     counter +=1
-            elif l.startswith("Generalized from"):
+            elif l.startswith("into"):
                 #create an empty lemma
                 current_lemma = Lemma(exp_folder, new_folder, prefix = str(counter))
                 current_lemma.smtfile = seed_file
