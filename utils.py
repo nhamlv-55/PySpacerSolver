@@ -500,7 +500,7 @@ class Dataset:
         print("SAVING VOCAB")
         self.vocab.save(os.path.join(folder, "vocab.json"))
 
-    def save_X_L(self, folder, forced = False):
+    def save_X_L(self, folder, print_matrix = False, forced = False):
         #if forced, save the dataset regardless of X_counter
         if forced == False and self.X_counter%self.save_every !=1:
             self.X_counter+=1
@@ -518,8 +518,7 @@ class Dataset:
             i,j = k
             X_matrix[i][j] = self.X[k]
 
-        for row in X_matrix:
-            print(row)
+
 
         #calculating P
         #P[i][j] = P(j|i)
@@ -531,9 +530,12 @@ class Dataset:
                     P_matrix[i][j]=0
                 else:
                     P_matrix[i][j] = X_matrix[i][j]/X_i
-        for row in P_matrix:
-            print(row)
 
+        if print_matrix:
+            for row in P_matrix:
+                print(row)
+            for row in X_matrix:
+                print(row)
         
         
         with open(os.path.join(folder, "X" + str(self.X_counter).zfill(5)+ ".json"), "w") as X_file:
