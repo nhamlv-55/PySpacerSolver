@@ -519,9 +519,9 @@ class Dataset:
         if forced == False and self.X_counter%self.save_every !=1:
             self.X_counter+=1
             return
-        with open(os.path.join(folder, "L.json"), "w") as L_file:
+        with open(os.path.join(folder, "L" + str(self.X_counter).zfill(5)+ ".json"), "w") as L_file:
             json.dump(self.L, L_file)
-        with open(os.path.join(folder, "L_freq.json"), "w") as L_freq_file:
+        with open(os.path.join(folder, "L_freq" + str(self.X_counter).zfill(5)+ ".json"), "w") as L_freq_file:
             json.dump(self.L_freq, L_freq_file)
         print(len(self.L))
         print(len(self.X))
