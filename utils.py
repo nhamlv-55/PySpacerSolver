@@ -463,6 +463,24 @@ class Dataset:
                 with open(dp_filename, "w") as f:
                     json.dump({"C_tree": C_tree.to_json(), "L_a_tree": L_a_tree.to_json(), "L_b_tree": L_b_tree.to_json(), "label": label}, f)
 
+    def parse_cube_to_lit_jsons(self, cube):
+        """
+        Given a cube, parse and return the JSON tree of its lits
+        """
+        #Normalize before doing anything
+        local_const_emb = ConsEmb()
+        
+        results = []
+
+        for lit in cube:
+            L_tree = ast_to_tree(lit, self.vocab, local_const_emb)
+            
+            L_json = {"tree": L_tree.to_json()}
+            results.append(L_json)
+
+        return results
+
+
 
     def add_dp_to_X(self, inducted_cube, filename):
         """
