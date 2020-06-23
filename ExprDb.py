@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.CRITICAL)
 
 
 from pysmt.fnode import FNode, FNodeContent
-from Z3Parser import Z3Parser
+from Doping.PySpacerSolver.Z3Parser import Z3Parser
 z3.set_param(proof = True)
 z3.set_param(model = True)
 class ExprDb:
