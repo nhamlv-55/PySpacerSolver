@@ -470,6 +470,7 @@ class Dataset:
         #Normalize before doing anything
         local_const_emb = ConsEmb()
         
+        cube = self.normalize_cube(cube)
         results = []
 
         for lit in cube:
