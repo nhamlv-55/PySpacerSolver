@@ -10,6 +10,8 @@ import math
 import matplotlib
 import matplotlib.pyplot as plt
 
+CONST_EMB_SIZE = 6
+
 def html_colored(text, color = "black"):
     text = text.replace("<", "&lt;")
     text = text.replace(">", "&gt;")
@@ -49,7 +51,7 @@ class ConsEmb:
     """
     use the value of the the constant and put it into an appropriate bin
     """
-    def __init__(self, emb_size = 30):
+    def __init__(self, emb_size):
         assert(emb_size%2==0)
         self.id2const = {}
         self.const2id = {}
@@ -81,7 +83,7 @@ class LocalConsEmb:
     """
     randomized constant embedding
     """
-    def __init__(self, emb_size = 30):
+    def __init__(self, emb_size):
         self.id2const = {}
         self.const2id = {}
         self.const_size = 0
@@ -117,6 +119,7 @@ class Vocab:
         self.add_sort("<ROOT>")
         self.add_sort("<UNK>")
 
+        self.const_emb_size = 0
     def add_token(self, w):
         '''add a token to vocab and return its id'''
         if w in self.w2id:
@@ -144,11 +147,28 @@ class Vocab:
         print("W2ID:", self.w2id)
 
     def save(self, filename):
-        vocab = {"id2w": self.id2w, "w2id": self.w2id, "size": self.size, "id2s": self.id2s, "s2id": self.s2id, "sort_size": self.sort_size}
+        vocab = {"id2w": self.id2w, "w2id": self.w2id,
+                 "size": self.size,
+                 "id2s": self.id2s, "s2id": self.s2id,
+                 "sort_size": self.sort_size,
+                 "const_emb_size": self.const_emb_size}
         with open(filename, "w") as f:
             json.dump(vocab, f)
+
+    def load(self, filename):
+        with open(filename, "r") as f:
+            data = json.load(f)
+
+        self.id2w = data["id2w"]
+        self.w2id = data["w2id"]
+        self.size = data["size"]
+        self.id2s = data["id2s"]
+        self.s2id = data["s2id"]
+        self.sort_size = data["sort_size"]
+        self.const_emb_size = data["const_emb_size"]
+
 class Node:
-    def __init__(self, const_emb_size = 30):
+    def __init__(self, const_emb_size):
         self._raw_expr = ""
         self._token = ""
         self._token_id = -1
@@ -265,7 +285,7 @@ class Node:
         return feat
 
 def ast_to_node(ast_node, vocab, local_const_emb):
-    node = Node()
+    node = Node(vocab.const_emb_size)
     node.set_token(ast_node, vocab, local_const_emb)
     node.set_sort(ast_node, vocab)
     if ast_node.num_args == 0:
@@ -278,7 +298,7 @@ def rootify(ast_node, vocab):
     '''
     attach the tree to a dummy node called ROOT to make sure everything is a tree (even a single node)
     '''
-    root_node = Node()
+    root_node = Node(vocab.const_emb_size)
     root_node.set_as_root(vocab)
     root_node.set_children([ast_node])
     return root_node
@@ -323,14 +343,14 @@ def convert_tree_to_tensors(tree, device=torch.device('cuda')):
     node_order, edge_order = calculate_evaluation_orders(adjacency_list, len(features))
 
     return {
-        'features': torch.tensor(features, device=device, dtype=torch.int64),
+        'features': torch.tensor(features, device=device, dtype=torch.float),
         'node_order': torch.tensor(node_order, device=device, dtype=torch.int64),
         'adjacency_list': torch.tensor(adjacency_list, device=device, dtype=torch.int64),
         'edge_order': torch.tensor(edge_order, device=device, dtype=torch.int64),
     }
 
 class Dataset:
-    def __init__(self, checkpoint = 500, folder = None, html_vis_page = None):
+    def __init__(self, checkpoint = 500, const_emb_size = CONST_EMB_SIZE, folder = None, html_vis_page = None):
         self.vocab = Vocab()
         self.dataset = {}
         if html_vis_page is not None:
@@ -341,6 +361,9 @@ class Dataset:
         self.checkpoint = checkpoint
         self.folder = folder
 
+        #const emb size
+        self.const_emb_size = const_emb_size
+        self.vocab.const_emb_size = const_emb_size
         #data for constructing matrix X
         self.L = {}
         self.X = {}
@@ -468,7 +491,7 @@ class Dataset:
         Given a cube, parse and return the JSON tree of its lits
         """
         #Normalize before doing anything
-        local_const_emb = ConsEmb()
+        local_const_emb = ConsEmb(emb_size = self.const_emb_size)
         
         cube = self.normalize_cube(cube)
         results = []
@@ -489,7 +512,7 @@ class Dataset:
         """
         #Normalize before doing anything
         inducted_cube = self.normalize_cube(inducted_cube)
-        local_const_emb = ConsEmb()
+        local_const_emb = ConsEmb(emb_size = self.const_emb_size)
         folder = os.path.dirname(filename)
         
         #build all L_a_tree and L_a_tree_str
