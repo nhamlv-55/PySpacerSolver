@@ -430,9 +430,12 @@ def skip_ind_gen_folder(folder, vis, dataset, limit):
     no_of_q = len(queries)
     limit = min(no_of_q, limit)
     for q in queries[:limit]:
-        skip_ind_gen(q, dataset = dataset, vis = vis)
-        if dataset is not None:
-            dataset.save_X_L(folder)
+        try:
+            skip_ind_gen(q, dataset = dataset, vis = vis)
+            if dataset is not None:
+                dataset.save_X_L(folder)
+        except Exception as e:
+            print(e)
     if dataset is not None:
         dataset.save_vocab(folder)
         dataset.save_X_L(folder, print_matrix = True, forced = True)
