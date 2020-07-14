@@ -40,7 +40,7 @@ def main():
     new_folder = "ind_gen_files"
     with open(os.path.join(exp_folder, ".z3-trace"), "r") as f:
         lines = f.readlines()
-
+        print(lines[:10])
 
     current_lemma = None
 
@@ -71,9 +71,16 @@ def main():
                     current_lemma.to_smt2()
                     current_lemma = None
                     counter +=1
+            elif l.startswith("Generalized from"):
+                #create a from lemma
+                current_lemma = Lemma(exp_folder, new_folder, prefix = "_from_"+str(counter))
+                current_lemma.smtfile = seed_file
             elif l.startswith("into"):
-                #create an empty lemma
-                current_lemma = Lemma(exp_folder, new_folder, prefix = str(counter))
+                #save the *from* lemma
+                if current_lemma is not None:
+                    current_lemma.to_smt2()
+                #create the *into* lemma
+                current_lemma = Lemma(exp_folder, new_folder, prefix = "_into_"+str(counter))
                 current_lemma.smtfile = seed_file
             elif current_lemma is not None:
                 current_lemma.lemma +=l
