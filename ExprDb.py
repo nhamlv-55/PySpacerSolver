@@ -122,8 +122,10 @@ class ExprDb:
     def push_cube(self, cmd):
         logger.debug(cmd)
         logger.debug(cmd.args)
-        
-        lits = [self.converter.convert(v) for v in cmd.args.args()]
+        if cmd.args.is_and():
+            lits = [self.converter.convert(v) for v in cmd.args.args()]
+        else:
+            lits = [self.converter.convert(cmd.args)]
         self._cubes.append(lits)
          
 
@@ -202,7 +204,6 @@ class ExprDb:
         with open(filename, "r") as f:
             ori_query = f.readlines()
             query_text = "".join(ori_query)
-
             all_commands = self.parser.get_script(cStringIO(query_text)).commands
 
         for cmd in all_commands:
