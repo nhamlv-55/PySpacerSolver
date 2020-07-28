@@ -9,8 +9,22 @@ import os
 import math
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.pyplot import figure
+from collections import defaultdict
 
 CONST_EMB_SIZE = 6
+
+def remap_keys(mapping):
+    return [{str(k): v} for k, v in mapping.items()]
+
+class MyError(Exception):
+    def __init__(self, message, errors):
+
+        # Call the base class constructor with the parameters it needs
+        super().__init__(message)
+
+        # Now for your custom code...
+        self.errors = errors
 
 def html_colored(text, color = "black"):
     text = text.replace("<", "&lt;")
@@ -204,9 +218,6 @@ class Node:
             self._token_id = vocab.add_token(self._token)
             self._raw_expr = str(ast_node)
 
-    
-
-
     def set_sort(self, ast_node, vocab):
         if z3.is_const(ast_node):
             if z3.is_bool(ast_node):
@@ -350,7 +361,7 @@ def convert_tree_to_tensors(tree, device=torch.device('cuda')):
     }
 
 class Dataset:
-    def __init__(self, checkpoint = 500, const_emb_size = CONST_EMB_SIZE, folder = None, html_vis_page = None):
+    def __init__(self, checkpoint = 500, const_emb_size = CONST_EMB_SIZE, folder = None, html_vis_page = None, small_test = False):
         self.vocab = Vocab()
         self.dataset = {}
         if html_vis_page is not None:
@@ -365,12 +376,19 @@ class Dataset:
         self.const_emb_size = const_emb_size
         self.vocab.const_emb_size = const_emb_size
         #data for constructing matrix X
-        self.L = {}
-        self.X = {}
-        self.L_freq = {}
+        self.positive_lit = {}
+        self.positive_X = defaultdict(int)
+        self.positive_lit_count = defaultdict(int)
+
+        self.negative_lit = {}
+        self.negative_X = defaultdict(int)
+        self.all_pair_count = defaultdict(int)
+        self.negative_lit_count = defaultdict(int)
         #a counter to dump X.1.json, X.2.json, etc.
         self.X_counter = 0
         self.save_every = 10
+
+        self.small_test = small_test #a flag to print extra verbose
 
     def print2html(self, s, color = "black"):
         print(s)
@@ -387,104 +405,104 @@ class Dataset:
             new_cube.append(self.normalize(l))
         return new_cube
 
-    def check_lit_conflict(self, cube, inducted_cube, local_const_emb):
-        '''
-        Check if exists 2 lits that are the same after tokenization, but one is red and one is blue.
-        Also returns a list of trees. Each tree is a conversion of a literal in the cube.
-        '''
-        self.print2html("Checking for lit conflict")
+    # def check_lit_conflict(self, cube, inducted_cube, local_const_emb):
+    #     '''
+    #     Check if exists 2 lits that are the same after tokenization, but one is red and one is blue.
+    #     Also returns a list of trees. Each tree is a conversion of a literal in the cube.
+    #     '''
+    #     self.print2html("Checking for lit conflict")
         
-        #a set contain all the lits that stays after ind_gen
-        conflict = False
-        blue_trees = set()
-        red_trees = set()
-        all_lit_trees = []
-        for lit in cube:
-            lit_tree = ast_to_tree(lit, self.vocab, local_const_emb)
-            all_lit_trees.append(lit_tree)
-            if lit in inducted_cube:
-                blue_trees.add(lit_tree.rewrite())
-            else:
-                red_trees.add(lit_tree.rewrite())
+    #     #a set contain all the lits that stays after ind_gen
+    #     conflict = False
+    #     blue_trees = set()
+    #     red_trees = set()
+    #     all_lit_trees = []
+    #     for lit in cube:
+    #         lit_tree = ast_to_tree(lit, self.vocab, local_const_emb)
+    #         all_lit_trees.append(lit_tree)
+    #         if lit in inducted_cube:
+    #             blue_trees.add(lit_tree.rewrite())
+    #         else:
+    #             red_trees.add(lit_tree.rewrite())
 
-        for i in range(len(cube)):
-            lit = cube[i]
-            lit_tree = all_lit_trees[i].rewrite()
-            if lit in inducted_cube and lit_tree not in red_trees:
-                self.print2html("%s =====> %s"%(lit, lit_tree), "blue")
-            elif lit in inducted_cube and lit_tree in red_trees:
-                conflict = True
-                self.print2html("%s =====> %s"%(lit, lit_tree), "purple")
-            elif lit not in inducted_cube and lit_tree in blue_trees:
-                conflict = True
-                self.print2html("%s =====> %s"%(lit, lit_tree), "purple")
-            elif lit not in inducted_cube and lit_tree not in blue_trees:
-                self.print2html("%s =====> %s"%(lit, lit_tree), "red")
+    #     for i in range(len(cube)):
+    #         lit = cube[i]
+    #         lit_tree = all_lit_trees[i].rewrite()
+    #         if lit in inducted_cube and lit_tree not in red_trees:
+    #             self.print2html("%s =====> %s"%(lit, lit_tree), "blue")
+    #         elif lit in inducted_cube and lit_tree in red_trees:
+    #             conflict = True
+    #             self.print2html("%s =====> %s"%(lit, lit_tree), "purple")
+    #         elif lit not in inducted_cube and lit_tree in blue_trees:
+    #             conflict = True
+    #             self.print2html("%s =====> %s"%(lit, lit_tree), "purple")
+    #         elif lit not in inducted_cube and lit_tree not in blue_trees:
+    #             self.print2html("%s =====> %s"%(lit, lit_tree), "red")
 
-        self.print2html("----------------------------")
-        return conflict, all_lit_trees
+    #     self.print2html("----------------------------")
+    #     return conflict, all_lit_trees
 
-    def add_dp(self, cube, inducted_cube, filename):
-        if len(self.dataset)%self.checkpoint==0:
-            self.save_vocab(self.folder)
-        local_const_emb = LocalConsEmb()
-        if len(cube)<=1:
-            return
-        #Normalize before doing anything
-        self.print2html("normalize the cube")
+    # def add_dp(self, cube, inducted_cube, filename):
+    #     if len(self.dataset)%self.checkpoint==0:
+    #         self.save_vocab(self.folder)
+    #     local_const_emb = LocalConsEmb()
+    #     if len(cube)<=1:
+    #         return
+    #     #Normalize before doing anything
+    #     self.print2html("normalize the cube")
 
-        self.print2html("raw cube")
-        visualize(cube, inducted_cube, self.html_vis_page)
+    #     self.print2html("raw cube")
+    #     visualize(cube, inducted_cube, self.html_vis_page)
 
-        self.print2html("normalized cube")
-        cube = self.normalize_cube(cube)
-        inducted_cube = self.normalize_cube(inducted_cube)
-        visualize(cube, inducted_cube, self.html_vis_page)
+    #     self.print2html("normalized cube")
+    #     cube = self.normalize_cube(cube)
+    #     inducted_cube = self.normalize_cube(inducted_cube)
+    #     visualize(cube, inducted_cube, self.html_vis_page)
 
-        #Check for conflict
-        conflict, all_lit_trees = self.check_lit_conflict(cube, inducted_cube, local_const_emb)
-        if conflict:
-            self.print2html("There is a self-conflict. Drop this cube")
-            return
+    #     #Check for conflict
+    #     conflict, all_lit_trees = self.check_lit_conflict(cube, inducted_cube, local_const_emb)
+    #     if conflict:
+    #         self.print2html("There is a self-conflict. Drop this cube")
+    #         return
 
 
 
-        last_collision_file = None
+    #     last_collision_file = None
 
-        #TODO: manually construct C_tree based on all L_tree (should save half the time)
-        C_tree = ast_to_tree(z3.And(cube), self.vocab, local_const_emb)
-        for i in range(len(cube)):
+    #     #TODO: manually construct C_tree based on all L_tree (should save half the time)
+    #     C_tree = ast_to_tree(z3.And(cube), self.vocab, local_const_emb)
+    #     for i in range(len(cube)):
 
-            for j in range(i+1, len(cube)):
-                '''4 possible labels: both lits are dropped 0, only one is dropped 1, non is dropped 2'''
-                if cube[i] in inducted_cube and cube[j] in inducted_cube:
-                    label = 0
-                elif cube[i] not in inducted_cube and cube[j] not in inducted_cube:
-                    label = 0
-                else:
-                    label = 1
+    #         for j in range(i+1, len(cube)):
+    #             '''4 possible labels: both lits are dropped 0, only one is dropped 1, non is dropped 2'''
+    #             if cube[i] in inducted_cube and cube[j] in inducted_cube:
+    #                 label = 0
+    #             elif cube[i] not in inducted_cube and cube[j] not in inducted_cube:
+    #                 label = 0
+    #             else:
+    #                 label = 1
 
-                L_a_tree = all_lit_trees[i]
-                L_b_tree = all_lit_trees[j]
+    #             L_a_tree = all_lit_trees[i]
+    #             L_b_tree = all_lit_trees[j]
 
-                dp_filename = filename+ "."+ str(i)+ "."+ str(j)+ ".dp.json"
-                X = (C_tree.rewrite(), L_a_tree.rewrite(), L_b_tree.rewrite())
-                datapoint = {"filename": filename, "cube": cube, "inducted_cube": inducted_cube, "label": label}
+    #             dp_filename = filename+ "."+ str(i)+ "."+ str(j)+ ".dp.json"
+    #             X = (C_tree.rewrite(), L_a_tree.rewrite(), L_b_tree.rewrite())
+    #             datapoint = {"filename": filename, "cube": cube, "inducted_cube": inducted_cube, "label": label}
 
-                if X in self.dataset and self.dataset[X]["label"]!=label:
-                    if last_collision_file is None:
-                        self.print2html("Exist a same datapoint with a different label")
-                        self.print2html("PREVIOUS ENTRY")
-                        self.print2html(self.dataset[X]["filename"])
-                        visualize(self.dataset[X]["cube"], self.dataset[X]["inducted_cube"], self.html_vis_page)
-                        self.print2html("THIS ENTRY")
-                        self.print2html(filename)
-                        visualize(cube, inducted_cube, self.html_vis_page)
-                        last_collision_file = self.dataset[X]["filename"]
-                else:
-                    self.dataset[X] = datapoint
-                with open(dp_filename, "w") as f:
-                    json.dump({"C_tree": C_tree.to_json(), "L_a_tree": L_a_tree.to_json(), "L_b_tree": L_b_tree.to_json(), "label": label}, f)
+    #             if X in self.dataset and self.dataset[X]["label"]!=label:
+    #                 if last_collision_file is None:
+    #                     self.print2html("Exist a same datapoint with a different label")
+    #                     self.print2html("PREVIOUS ENTRY")
+    #                     self.print2html(self.dataset[X]["filename"])
+    #                     visualize(self.dataset[X]["cube"], self.dataset[X]["inducted_cube"], self.html_vis_page)
+    #                     self.print2html("THIS ENTRY")
+    #                     self.print2html(filename)
+    #                     visualize(cube, inducted_cube, self.html_vis_page)
+    #                     last_collision_file = self.dataset[X]["filename"]
+    #             else:
+    #                 self.dataset[X] = datapoint
+    #             with open(dp_filename, "w") as f:
+    #                 json.dump({"C_tree": C_tree.to_json(), "L_a_tree": L_a_tree.to_json(), "L_b_tree": L_b_tree.to_json(), "label": label}, f)
 
     def parse_cube_to_lit_jsons(self, cube):
         """
@@ -504,106 +522,218 @@ class Dataset:
 
         return results
 
+    def add_dual_dp_to_X(self, ori_cube, inducted_cube, folder):
+        """
+        Like add_dp_to_X, but take into account the original cube as well
+        """
+        self.add_dp_to_positive_X(inducted_cube, folder)
+        self.add_dp_to_negative_X(ori_cube, inducted_cube, folder)
+
+    def add_dp_to_negative_X(self, ori_cube, inducted_cube, folder):
+        """
+        Build the negative X matrix. Require both the ori_cube and the inducted_cube
+        P(lit_x is drop| lit_y is kept) = how many times (x not in inducted cube, (x,y) in ori cube)/how many times (x,y) in ori cube
+        """
+        #Normalize before doing anything
+        ori_cube = self.normalize_cube(ori_cube)
+        inducted_cube = self.normalize_cube(inducted_cube)
+        print("ori_cube", ori_cube)
+        print("inducted_cube", inducted_cube)
+        local_const_emb = ConsEmb(emb_size = self.const_emb_size)
+
+        
+        L_ori_trees_str = []
+        L_inducted_trees_str = []
+        #update L_freq and L
+        for i in range(len(ori_cube)):
+            L_a_tree = ast_to_tree(ori_cube[i], self.vocab, local_const_emb)
+            L_a_tree_str = str(ori_cube[i])
+            L_ori_trees_str.append(L_a_tree_str)
+
+            if L_a_tree_str not in self.negative_lit:
+                a_index = len(self.negative_lit)
+                with open(os.path.join(folder, "negative_lit_" + str(a_index)+".json"), "w") as f:
+                    json.dump({"index": a_index, "tree": L_a_tree.to_json()}, f)
+
+                self.negative_lit[L_a_tree_str]=a_index
+            self.negative_lit_count[L_a_tree_str] += 1
+
+        #update all pair count
+        for i in range(len(ori_cube)):
+            for j in range(i, len(ori_cube)):
+                L_i_tree_str = str(ori_cube[i])
+                L_j_tree_str = str(ori_cube[j])
+
+                i_index = self.negative_lit[L_i_tree_str]
+                j_index = self.negative_lit[L_j_tree_str]
+                self.all_pair_count[(i_index, j_index)]+=1
+                self.all_pair_count[(j_index, i_index)]+=1
 
 
-    def add_dp_to_X(self, inducted_cube, filename):
+
+        #build L_inducted_trees_str
+        for i in range(len(inducted_cube)):
+            L_a_tree = ast_to_tree(inducted_cube[i], self.vocab, local_const_emb)
+            L_a_tree_str = str(inducted_cube[i])
+
+            if self.small_test:
+                print(L_a_tree_str)
+                print(L_a_tree_str in L_ori_trees_str)
+            L_inducted_trees_str.append(L_a_tree_str)
+
+        if self.small_test:
+            print("L_ori_trees")
+            print("\n".join(L_ori_trees_str))
+            print("L_inducted_trees")
+            print("\n".join(L_inducted_trees_str))
+
+        #collect anti-occurance
+        for ori_lit_idx in range(len(ori_cube)):
+            L_ori_tree_str = L_ori_trees_str[ori_lit_idx]
+            ori_lit_global_idx = self.negative_lit[L_ori_tree_str]
+            if L_ori_tree_str not in L_inducted_trees_str:
+                #mark all pair into the negative_X matrix
+                for inducted_lit_idx in range(len(inducted_cube)):
+                    L_inducted_tree_str = L_inducted_trees_str[inducted_lit_idx]
+                    inducted_lit_global_idx = self.negative_lit[L_inducted_tree_str]
+
+                    self.negative_X[(ori_lit_global_idx, inducted_lit_global_idx)]+=1
+
+
+
+    def add_dp_to_positive_X(self, inducted_cube, folder):
         """
         Build the X matrix. Only the inducted cube is needed
         """
+        #if the cube has only 1 lit, skip it
+        if len(inducted_cube)==1:
+            return
         #Normalize before doing anything
         inducted_cube = self.normalize_cube(inducted_cube)
         local_const_emb = ConsEmb(emb_size = self.const_emb_size)
-        folder = os.path.dirname(filename)
         
         #build all L_a_tree and L_a_tree_str
         L_trees_str = []
 
         for i in range(len(inducted_cube)):
             L_a_tree = ast_to_tree(inducted_cube[i], self.vocab, local_const_emb)
-            L_a_tree_str = L_a_tree.rewrite(write_emb = True)
+            L_a_tree_str = str(inducted_cube[i])
             L_trees_str.append(L_a_tree_str)
 
-            if L_a_tree_str not in self.L:
-                a_index = len(self.L)
-                self.L[L_a_tree_str]=a_index
-                with open(os.path.join(folder, "lit_" + str(a_index)+".json"), "w") as f:
+            if L_a_tree_str not in self.positive_lit:
+                a_index = len(self.positive_lit)
+                self.positive_lit[L_a_tree_str]=a_index
+                with open(os.path.join(folder, "positive_lit_" + str(a_index)+".json"), "w") as f:
                     json.dump({"index": a_index, "tree": L_a_tree.to_json()}, f)
 
             #update L_freq: how many times a literal appears in the whole dataset
-            if L_a_tree_str not in self.L_freq:
-                self.L_freq[L_a_tree_str] = 1
-            else:
-                self.L_freq[L_a_tree_str] +=1
+            self.positive_lit_count[L_a_tree_str] += 1
 
         #collect co-occurance
         for i in range(len(inducted_cube)):
             for j in range(i+1, len(inducted_cube)):
-                L_a_tree_str = L_trees_str[i]
-                L_b_tree_str = L_trees_str[j]
+                L_a_tree_str = str(L_trees_str[i])
+                L_b_tree_str = str(L_trees_str[j])
 
-                a_index = self.L[L_a_tree_str]
-                b_index = self.L[L_b_tree_str]
+                a_index = self.positive_lit[L_a_tree_str]
+                b_index = self.positive_lit[L_b_tree_str]
 
-                if (a_index, b_index) in self.X:
-                    self.X[(a_index, b_index)]+=1
-                    self.X[(b_index, a_index)]+=1
-                else:
-                    self.X[(a_index, b_index)]=1
-                    self.X[(b_index, a_index)]=1
+                self.positive_X[(a_index, b_index)]+=1
+                self.positive_X[(b_index, a_index)]+=1
 
     def save_vocab(self, folder):
         print("SAVING VOCAB")
         self.vocab.save(os.path.join(folder, "vocab.json"))
 
     def save_X_L(self, folder, print_matrix = False, forced = False):
-        assert(len(self.L)==len(self.L_freq))
         #if forced, save the dataset regardless of X_counter
         if forced == False and self.X_counter%self.save_every !=1:
             self.X_counter+=1
             return
-        with open(os.path.join(folder, "L" + str(self.X_counter).zfill(5)+ ".json"), "w") as L_file:
-            json.dump(self.L, L_file)
-        with open(os.path.join(folder, "L_freq" + str(self.X_counter).zfill(5)+ ".json"), "w") as L_freq_file:
-            json.dump(self.L_freq, L_freq_file)
-        print(len(self.L))
-        print(len(self.X))
 
-        X_matrix = np.zeros((len(self.L), len(self.L)))
-        for k in self.X:
+        assert(self.positive_lit.keys()==self.positive_lit_count.keys())
+        assert(self.negative_lit.keys()==self.negative_lit_count.keys())
+        self.X_counter+=1
+
+        if forced:
+            all_lits_set = set(self.negative_lit.keys())
+            inducted_lits_set = set(self.positive_lit.keys())
+            diff_set = set(all_lits_set.difference(inducted_lits_set))
+
+            print("all_lits_set", len(all_lits_set))
+            print("inducted_lits_set", len(inducted_lits_set))
+            print("diff", len(all_lits_set.difference(inducted_lits_set)))
+            diff_dict = {}
+            for lit in diff_set:
+                diff_dict[lit] = self.negative_lit_count[lit]
+            with open(os.path.join(folder, "diff_set.json"), "w") as f:
+                json.dump(diff_dict, f)
+            all_cooc_set = set(self.positive_X.keys())
+            all_antioc_set = set(self.negative_X.keys())
+            intersect_set = all_cooc_set.intersection(all_antioc_set)
+            print(len(all_cooc_set), len(all_antioc_set), len(intersect_set))
+            with open(os.path.join(folder, "intersect_set.json"), "w") as f:
+                for lit in intersect_set:
+                    f.write("{}\n".format(lit))
+
+                    
+
+        with open(os.path.join(folder, "positive_lits_map" + str(self.X_counter).zfill(5)+ ".json"), "w") as f:
+            json.dump(self.positive_lit, f)
+        with open(os.path.join(folder, "positive_lits_count" + str(self.X_counter).zfill(5)+ ".json"), "w") as f:
+            json.dump(self.positive_lit_count, f)
+        with open(os.path.join(folder, "negative_lits_map" + str(self.X_counter).zfill(5)+ ".json"), "w") as f:
+            json.dump(self.negative_lit, f)
+        with open(os.path.join(folder, "negative_lits_count" + str(self.X_counter).zfill(5)+ ".json"), "w") as f:
+            json.dump(self.negative_lit_count, f)
+        positive_X_matrix = np.zeros((len(self.positive_lit), len(self.positive_lit)))
+        for k in self.positive_X:
             i,j = k
-            X_matrix[i][j] = self.X[k]
+            if self.small_test:
+                print("positive pair:", k, self.positive_X[k])
+            positive_X_matrix[i][j] = self.positive_X[k]
+
+        negative_X_matrix = np.zeros((len(self.negative_lit), len(self.negative_lit)))
+        for k in self.negative_X:
+            i,j = k
+            if self.small_test:
+                print("negative pair:", k, self.negative_X[k])
+            negative_X_matrix[i][j] = self.negative_X[k]
+
+        all_pair_matrix = np.zeros((len(self.negative_lit), len(self.negative_lit)))
+        for k in self.all_pair_count:
+            i,j=k
+            all_pair_matrix[i][j] = self.all_pair_count[k]
+
+        P_negative_matrix = np.zeros((len(self.negative_lit), len(self.negative_lit)))
+        for i in range(len(self.negative_lit)):
+            for j in range(len(self.negative_lit)):
+                if negative_X_matrix[i][j]==0:
+                    P_negative_matrix[i][j]=0
+                else:
+                    P_negative_matrix[i][j] = negative_X_matrix[i][j]/all_pair_matrix[i][j]
+        # P_negative_matrix = np.divide(negative_X_matrix, all_pair_matrix)
+        with open(os.path.join(folder, "positive_X_" + str(self.X_counter).zfill(5)+ ".json"), "w") as f:
+            json.dump({"X": positive_X_matrix.tolist(), "X_raw": remap_keys(self.positive_X)}, f)
+        with open(os.path.join(folder, "negative_X_" + str(self.X_counter).zfill(5)+ ".json"), "w") as f:
+            json.dump({"X": negative_X_matrix.tolist(), "X_raw": remap_keys(self.negative_X)}, f)
+        with open(os.path.join(folder, "all_pairs_X_" + str(self.X_counter).zfill(5)+ ".json"), "w") as f:
+            json.dump({"X": all_pair_matrix.tolist()}, f)
+        with open(os.path.join(folder, "P_negative_X_matrix_" + str(self.X_counter).zfill(5)+ ".json"), "w") as f:
+            json.dump({"X": P_negative_matrix.tolist()}, f)
 
 
 
-        #calculating P
-        #P[i][j] = P(j|i)
-        #NOTE: disable for now. It would be more efficient to just calculate X. P can be derived by X.
-        # P_matrix = np.zeros((len(self.L), len(self.L)))
-        # for i in range(len(self.L)):
-        #     X_i = np.sum(X_matrix[i])
-        #     for j in range(len(self.L)):
-        #         if X_matrix[i][j]==0:
-        #             P_matrix[i][j]=0
-        #         else:
-        #             P_matrix[i][j] = X_matrix[i][j]/X_i
+
 
         if print_matrix:
-
-            fig, (ax0, ax1) = plt.subplots(1, 2)
-            im = ax0.imshow(X_matrix, interpolation = None)
-            im = ax1.imshow(X_matrix.astype(bool), interpolation = None)
+            fig, axs = plt.subplots(4, 1, figsize = (20, 20))
+            im = axs[0].imshow(positive_X_matrix, interpolation = None)
+            im = axs[1].imshow(positive_X_matrix.astype(bool), interpolation = None)
+            im = axs[2].imshow(negative_X_matrix, interpolation = None)
+            im = axs[3].imshow(negative_X_matrix.astype(bool), interpolation = None)
             plt.savefig("XP.svg")
-            for row in X_matrix:
-                print(row)
         
-        
-        with open(os.path.join(folder, "X" + str(self.X_counter).zfill(5)+ ".json"), "w") as X_file:
-            json.dump({"X": X_matrix.tolist()}, X_file)
-        # with open(os.path.join(folder, "P" + str(self.X_counter).zfill(5)+ ".json"), "w") as P_file:
-            # json.dump({"P": P_matrix.tolist()}, P_file)
-
-
-        self.X_counter+=1
 
 
     def dump_dataset(self, folder):
