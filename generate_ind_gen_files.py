@@ -73,14 +73,14 @@ def main():
                     counter +=1
             elif l.startswith("Generalized from"):
                 #create a from lemma
-                current_lemma = Lemma(exp_folder, new_folder, prefix = "_from_"+str(counter))
+                current_lemma = Lemma(exp_folder, new_folder, prefix = "_from_"+str(counter).zfill(5))
                 current_lemma.smtfile = seed_file
             elif l.startswith("into"):
                 #save the *from* lemma
                 if current_lemma is not None:
                     current_lemma.to_smt2()
                 #create the *into* lemma
-                current_lemma = Lemma(exp_folder, new_folder, prefix = "_into_"+str(counter))
+                current_lemma = Lemma(exp_folder, new_folder, prefix = "_into_"+str(counter).zfill(5))
                 current_lemma.smtfile = seed_file
             elif current_lemma is not None:
                 current_lemma.lemma +=l
