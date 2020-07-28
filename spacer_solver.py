@@ -424,18 +424,59 @@ def skip_ind_gen(filename, dataset, vis = False):
         # dataset.add_dp(cube, inducted_cube, filename)
         dataset.add_dp_to_X(cube, filename)
     del edb
-def skip_ind_gen_folder(folder, vis, dataset, limit):
-    queries = glob.glob(folder+"/*.smt2")
-    queries = sorted(queries) 
-    no_of_q = len(queries)
-    limit = min(no_of_q, limit)
-    for q in queries[:limit]:
-        try:
-            skip_ind_gen(q, dataset = dataset, vis = vis)
-            if dataset is not None:
-                dataset.save_X_L(folder)
-        except Exception as e:
-            print(e)
+def skip_explicit_ind_gen(ori_file, inducted_file, dataset, vis = False):
+    '''
+    same as skip_ind_gen but take into account both the original and inducted cube
+    '''
+    ori_edb = ExprDb(ori_file)
+    ori_cube = ori_edb.get_cube()
+
+    inducted_edb = ExprDb(inducted_file)
+    inducted_cube = inducted_edb.get_cube()
+
+    if vis:
+        DPu.visualize(cube, cube)
+    #generate dataset
+    if dataset is not None:
+        # dataset.add_dp(cube, inducted_cube, filename)
+        folder = os.path.dirname(ori_file)
+        dataset.add_dual_dp_to_X(ori_cube, inducted_cube, folder)
+    del ori_edb
+    del inducted_edb
+def skip_ind_gen_folder(folder, vis, dataset, limit, explicit_negative = True):
+    print("explicit_negative")
+    if explicit_negative:
+        ori_cubes = glob.glob(folder+"/*from*")
+        ori_cubes = sorted(ori_cubes)
+        inducted_cubes  = glob.glob(folder+"/*into*")
+        inducted_cubes = sorted(inducted_cubes)
+
+        assert(len(ori_cubes)==len(inducted_cubes))
+
+        no_of_q = len(ori_cubes)
+        limit = min(no_of_q, limit)
+        for idx in range(0, limit):
+            try:
+                print("processing",)
+                print(ori_cubes[idx],)
+                print(inducted_cubes[idx])
+                skip_explicit_ind_gen(ori_cubes[idx], inducted_cubes[idx], dataset = dataset, vis = vis)
+                if dataset is not None:
+                    dataset.save_X_L(folder)
+            except Exception as e:
+                print(e)
+    else:
+        queries = glob.glob(folder+"/*.smt2")
+        queries = sorted(queries) 
+        no_of_q = len(queries)
+        limit = min(no_of_q, limit)
+        for q in queries[:limit]:
+            try:
+                skip_ind_gen(q, dataset = dataset, vis = vis)
+                if dataset is not None:
+                    dataset.save_X_L(folder)
+            except Exception as e:
+                print(e)
     if dataset is not None:
         dataset.save_vocab(folder)
         dataset.save_X_L(folder, print_matrix = True, forced = True)
@@ -460,7 +501,7 @@ if __name__ == '__main__':
     limit = args.limit
     if os.path.isdir(args.input):
         if args.gen_dataset:
-            dataset = DPu.Dataset(folder = args.input, html_vis_page = os.path.join(args.input, "ind_gen_vis.html"))
+            dataset = DPu.Dataset(folder = args.input, html_vis_page = os.path.join(args.input, "ind_gen_vis.html"), small_test = (limit<=10))
         if args.skip_indgen:
             skip_ind_gen_folder(args.input, args.vis, dataset = dataset, limit = limit)
         else:
