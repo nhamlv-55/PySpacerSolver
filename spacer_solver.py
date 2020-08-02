@@ -9,6 +9,7 @@ import time
 from itertools import chain, combinations
 import copy
 import Doping.PySpacerSolver.utils as DPu
+from Doping.utils.utils import get_seed_file
 class SpacerSolverProxyDb(object):
     def __init__(self, proxies_db):
         #map from proxy_lit to expr. Note that there maybe duplicated exprs
@@ -443,8 +444,16 @@ def skip_explicit_ind_gen(ori_file, inducted_file, dataset, vis = False):
         dataset.add_dual_dp_to_X(ori_cube, inducted_cube, folder)
     del ori_edb
     del inducted_edb
-def skip_ind_gen_folder(folder, vis, dataset, limit, explicit_negative = True):
-    print("explicit_negative")
+def skip_ind_gen_folder(seed_file, folder, vis, dataset, limit, explicit_negative = True):
+    #put all the vars into the vocab
+    seed_expr_db = ExprDb(seed_file)
+    seed_vars = seed_expr_db.get_vars()
+    seed_vars = sorted(seed_vars)
+
+    for v in seed_vars:
+        dataset.vocab.add_token(v)
+
+
     if explicit_negative:
         ori_cubes = glob.glob(folder+"/*from*")
         ori_cubes = sorted(ori_cubes)
@@ -483,6 +492,7 @@ def skip_ind_gen_folder(folder, vis, dataset, limit, explicit_negative = True):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-input', help='could be a smt2 file or a folder')
+    parser.add_argument('-S', '--seed-path', help='path to the folder containing the seed pool_solver indgen smt2 query file')
     parser.add_argument('-policy', help='a json policy file')
     parser.add_argument("-l", "--log", dest="logLevel", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], default='CRITICAL', help="Set the logging level")
     parser.add_argument('-powerset', action='store_true')
@@ -499,11 +509,13 @@ if __name__ == '__main__':
     dataset = None
     policy_file = args.policy
     limit = args.limit
+
+    seed_file = get_seed_file(args.seed_path)
     if os.path.isdir(args.input):
         if args.gen_dataset:
             dataset = DPu.Dataset(folder = args.input, html_vis_page = os.path.join(args.input, "ind_gen_vis.html"), small_test = (limit<=10))
         if args.skip_indgen:
-            skip_ind_gen_folder(args.input, args.vis, dataset = dataset, limit = limit)
+            skip_ind_gen_folder(seed_file, args.input, args.vis, dataset = dataset, limit = limit)
         else:
             ind_gen_folder(args.input, policy_file, args.powerset, args.vis, dataset = dataset, limit = limit)
     elif os.path.isfile(args.input):
