@@ -127,11 +127,11 @@ class Vocab:
         self.sort_size = 0
 
         #add constant
-        self.add_token("<ROOT>")
-        self.add_token("<UNK>")
+        for t in "<ROOT> <UNK> <NUMBER> + - * / <= >= = not".split():
+            self.add_token(t)
 
-        self.add_sort("<ROOT>")
-        self.add_sort("<UNK>")
+        for s in "<ROOT> <UNK> Bool <VAR> <POS_RAT> <ZERO> <Real> <NEG_RAT> <BOOL_VAR>".split():
+            self.add_sort(s)
 
         self.const_emb_size = 0
     def add_token(self, w):
