@@ -13,7 +13,7 @@ from matplotlib.pyplot import figure
 from collections import defaultdict
 
 CONST_EMB_SIZE = 6
-
+MIN_COUNT = 5
 def remap_keys(mapping):
     return [{str(k): v} for k, v in mapping.items()]
 
@@ -75,7 +75,10 @@ class ConsEmb:
     def add_const(self, const_node):
         '''add a const to vocab and return its id'''
         if const_node == 0:
-            return -1, [0]*(2*self.mag_range + 2)
+            zero_emb = [0]*(2*self.mag_range + 2)
+            zero_emb[self.mag_range]=1
+            zero_emb[-1]=0.0
+            return -1, zero_emb
         num = const_node.numerator_as_long()
         den = const_node.denominator_as_long()
         # sign = num >= 0
@@ -709,6 +712,8 @@ class Dataset:
         for i in range(len(self.negative_lit)):
             for j in range(len(self.negative_lit)):
                 if negative_X_matrix[i][j]==0:
+                    P_negative_matrix[i][j]=0
+                elif all_pair_matrix[i][j]<MIN_COUNT:
                     P_negative_matrix[i][j]=0
                 else:
                     P_negative_matrix[i][j] = negative_X_matrix[i][j]/all_pair_matrix[i][j]
