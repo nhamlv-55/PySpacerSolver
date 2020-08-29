@@ -92,7 +92,9 @@ class ConsEmb:
         magnitude_vector[self.mag_range+magnitude] = 1
         
         # print("magnitude", magnitude)
-        norm_val = val*(10**-magnitude)
+        sign = val/abs(val)
+        norm_val = sign*math.log(abs(val))*(10**-magnitude)
+        # norm_val = val*(10**-magnitude)
         # print(norm_val)
         return -1, magnitude_vector + [norm_val]
 
