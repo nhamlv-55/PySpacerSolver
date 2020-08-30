@@ -208,7 +208,10 @@ class ExprDb:
 
         for cmd in all_commands:
             if cmd.name=="declare-fun":
-                self.add_var(cmd)
+                try:
+                    self.add_var(cmd)
+                except:
+                    continue
             elif cmd.name == "assert":
                 self.add_assert(cmd)
             elif cmd.name == "check-sat":
@@ -221,5 +224,6 @@ class ExprDb:
                 logger.debug(cmd)
 
 if __name__=="__main__":
-    db = ExprDb("pool_solver_vsolver#0_1.smt2")
-    
+    db = ExprDb('../all_lra_chc18/chc-lra-0002.smt2')
+    print(db._other_ass)    
+    print(db._cubes)

@@ -1,7 +1,7 @@
 from pysmt.smtlib.parser import SmtLibParser, SmtLibCommand, SmtLibScript
 from pysmt.exceptions import UnknownSmtLibCommandError, PysmtSyntaxError
 import logging
-
+import functools
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.CRITICAL)
 
