@@ -563,7 +563,7 @@ class Dataset:
 
             if L_a_tree_str not in self.negative_lit:
                 a_index = len(self.negative_lit)
-                with open(os.path.join(folder, "negative_lit_" + str(a_index)+".json"), "w") as f:
+                with open(os.path.join(folder, "negative_lit_" + str(a_index).zfill(5)+".json"), "w") as f:
                     json.dump({"index": a_index, "tree": L_a_tree.to_json()}, f)
 
                 self.negative_lit[L_a_tree_str]=a_index
@@ -634,7 +634,7 @@ class Dataset:
             if L_a_tree_str not in self.positive_lit:
                 a_index = len(self.positive_lit)
                 self.positive_lit[L_a_tree_str]=a_index
-                with open(os.path.join(folder, "positive_lit_" + str(a_index)+".json"), "w") as f:
+                with open(os.path.join(folder, "positive_lit_" + str(a_index).zfill(5)+".json"), "w") as f:
                     json.dump({"index": a_index, "tree": L_a_tree.to_json()}, f)
 
             #update L_freq: how many times a literal appears in the whole dataset
