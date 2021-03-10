@@ -10,6 +10,9 @@ from itertools import chain, combinations
 import copy
 import Doping.PySpacerSolver.utils as DPu
 from Doping.utils.utils import get_seed_file
+import traceback
+import sys
+
 class SpacerSolverProxyDb(object):
     def __init__(self, proxies_db):
         #map from proxy_lit to expr. Note that there maybe duplicated exprs
@@ -473,7 +476,8 @@ def skip_ind_gen_folder(seed_file, folder, vis, dataset, limit, explicit_negativ
                 if dataset is not None:
                     dataset.save_X_L(folder)
             except Exception as e:
-                print(e)
+                traceback.print_exc()
+                print("Error in %s".format(folder))
     else:
         queries = glob.glob(folder+"/*.smt2")
         queries = sorted(queries) 
@@ -485,7 +489,8 @@ def skip_ind_gen_folder(seed_file, folder, vis, dataset, limit, explicit_negativ
                 if dataset is not None:
                     dataset.save_X_L(folder)
             except Exception as e:
-                print(e)
+                traceback.print_exc()
+                print("Error in %s".format(folder))
     if dataset is not None:
         dataset.save_vocab(folder)
         dataset.save_X_L(folder, print_matrix = True, forced = True)
@@ -511,6 +516,8 @@ if __name__ == '__main__':
     limit = args.limit
 
     seed_file = get_seed_file(args.seed_path)
+    if seed_file is None:
+        sys.exit("No seed file")
     if os.path.isdir(args.input):
         if args.gen_dataset:
             dataset = DPu.Dataset(folder = args.input, html_vis_page = os.path.join(args.input, "ind_gen_vis.html"), small_test = (limit<=10))
