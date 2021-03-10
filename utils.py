@@ -11,7 +11,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
 from collections import defaultdict
-
+import traceback
 CONST_EMB_SIZE = 6
 MIN_COUNT = 5
 def remap_keys(mapping):
@@ -224,30 +224,36 @@ class Node:
             self._raw_expr = str(ast_node)
 
     def set_sort(self, ast_node, vocab):
-        if z3.is_const(ast_node):
-            if z3.is_bool(ast_node):
-                sort = "<BOOL_VAR>"
-            elif ast_node == 0:
-                sort = "<ZERO>"
-            elif z3.is_int(ast_node):
-                if ast_node < 0:
-                    sort = "<NEG_INT>"
+        try:
+            if z3.is_const(ast_node):
+                if z3.is_bool(ast_node):
+                    sort = "<BOOL_VAR>"
+
+                elif z3.is_int_value(ast_node):
+                    val = ast_node.as_long()
+                    if val < 0:
+                        sort = "<NEG_INT>"
+                    elif val == 0:
+                        sort = "<ZERO>"
+                    else:
+                        sort = "<POS_INT>"
+                elif z3.is_rational_value(ast_node):
+                    fl = float(ast_node.numerator_as_long())/float(ast_node.denominator_as_long())
+                    if fl < 0:
+                        sort = "<NEG_RAT>"
+                    else:
+                        sort = "<POS_RAT>"
                 else:
-                    sort = "<POS_INT>"
-            elif z3.is_rational_value(ast_node):
-                fl = float(ast_node.numerator_as_long())/float(ast_node.denominator_as_long())
-                if fl < 0:
-                    sort = "<NEG_RAT>"
-                else:
-                    sort = "<POS_RAT>"
+                    sort = "<VAR>"
+            elif ast_node.decl().name() == "and":
+                sort = "<AND>"
             else:
-                sort = "<VAR>"
-        elif ast_node.decl().name() == "and":
-            sort = "<AND>"
-        else:
-            sort = ast_node.sort().name()
-        self._sort = sort
-        self._sort_id = vocab.add_sort(self._sort)
+                sort = ast_node.sort().name()
+            self._sort = sort
+            self._sort_id = vocab.add_sort(self._sort)
+        except:
+            traceback.print_exc()
+            print(ast_node, ast_node.sort(), type(ast_node))
     def set_node_idx(self, idx):
         self._node_idx = idx
 
