@@ -13,8 +13,6 @@ class Z3Parser(SmtLibParser):
         self.commands["act-lvl"] = self._cmd_act_lvl
         self.commands["ind-gen"] = self._cmd_ind_gen
         self.commands["push-cube"] = self._cmd_push_cube
-        self.commands[":added-eqs"] = self._cmd_ignore
-        self.commands["params"] = self._cmd_ignore
 
     def _cmd_ignore(self, current, tokens):
         _ = self.parse_check_sat_expr_list(tokens, current)
@@ -64,6 +62,8 @@ class Z3Parser(SmtLibParser):
 #         self._reset() # prepare the parser
         res = SmtLibScript()
         for cmd in self.get_command_generator(script):
+            if cmd.name == "exit":
+                break
             res.add_command(cmd)
         res.annotations = self.cache.annotations
         return res

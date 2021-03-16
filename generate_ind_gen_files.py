@@ -22,12 +22,13 @@ class Lemma:
                 return
         new_filename = self.smtfile + ".with_lemma"+self.prefix+".smt2"
         with open(os.path.join(self.exp_folder, self.new_folder, new_filename), "w") as f:
-            f.writelines(old_file_lines)
-            f.write("\n")
-            f.write("(act-lvl %s)\n"%(self.level))
-            f.write("(ind-gen %s)\n"%(self.lemma))
-
-
+            for l in old_file_lines:
+                if l.strip()=="(exit)":
+                    f.write("(act-lvl %s)\n"%(self.level))
+                    f.write("(ind-gen %s)\n"%(self.lemma))
+                    f.write("(exit)\n")
+                else:
+                    f.write(l)
 
 def main():
     parser = argparse.ArgumentParser()
