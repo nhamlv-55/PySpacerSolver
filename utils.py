@@ -11,9 +11,12 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
 from collections import defaultdict
+import logging
 import traceback
 CONST_EMB_SIZE = 6
-MIN_COUNT = 5
+MIN_COUNT = 1
+
+
 def remap_keys(mapping):
     return [{str(k): v} for k, v in mapping.items()]
 
@@ -79,14 +82,17 @@ class ConsEmb:
             zero_emb[self.mag_range]=1
             zero_emb[-1]=0.0
             return -1, zero_emb
-        num = const_node.numerator_as_long()
-        den = const_node.denominator_as_long()
-        # sign = num >= 0
-        val = float(num/den)
-        # print(num)
-        # print("------------------ = {}".format(val))
-        # print(den)
 
+        if z3.is_rational_value(const_node):
+            num = const_node.numerator_as_long()
+            den = const_node.denominator_as_long()
+            # sign = num >= 0
+            val = float(num/den)
+            # print(num)
+            # print("------------------ = {}".format(val))
+            # print(den)
+        else:
+            val = const_node.as_long()
         magnitude = int(math.log10(abs(val)))
         magnitude_vector = [0]*(2*self.mag_range + 1)
         magnitude_vector[self.mag_range+magnitude] = 1
@@ -211,7 +217,7 @@ class Node:
         elif key =="index": return self.set_node_idx(value)
 
     def set_token(self, ast_node, vocab, local_emb = None):
-        if z3.is_rational_value(ast_node):
+        if z3.is_rational_value(ast_node) or z3.is_int_value(ast_node):
             self._token = "<NUMBER>"
             if local_emb is not None:
                 idx, emb_val = local_emb.add_const(ast_node)
@@ -372,7 +378,7 @@ def convert_tree_to_tensors(tree, device=torch.device('cuda')):
     }
 
 class Dataset:
-    def __init__(self, checkpoint = 500, const_emb_size = CONST_EMB_SIZE, folder = None, html_vis_page = None, small_test = False):
+    def __init__(self, checkpoint = 500, const_emb_size = CONST_EMB_SIZE, folder = None, html_vis_page = None, small_test = False, log_lvl = logging.INFO):
         self.vocab = Vocab()
         self.dataset = {}
         if html_vis_page is not None:
@@ -395,12 +401,17 @@ class Dataset:
         self.negative_X = defaultdict(int)
         self.all_pair_count = defaultdict(int)
         self.negative_lit_count = defaultdict(int)
+
+        self.rnn_dps = []
+
         #a counter to dump X.1.json, X.2.json, etc.
         self.X_counter = 0
         self.save_every = 10
 
         self.small_test = small_test #a flag to print extra verbose
 
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(getattr(logging, log_lvl))
     def print2html(self, s, color = "black"):
         print(s)
         if self.html_vis_page is not None:
@@ -555,6 +566,10 @@ class Dataset:
         
         L_ori_trees_str = []
         L_inducted_trees_str = []
+
+        L_ori_ids = []
+        L_inducted_ids = []
+
         #update L_freq and L
         for i in range(len(ori_cube)):
             L_a_tree = ast_to_tree(ori_cube[i], self.vocab, local_const_emb)
@@ -563,10 +578,13 @@ class Dataset:
 
             if L_a_tree_str not in self.negative_lit:
                 a_index = len(self.negative_lit)
+
                 with open(os.path.join(folder, "negative_lit_" + str(a_index).zfill(5)+".json"), "w") as f:
                     json.dump({"index": a_index, "tree": L_a_tree.to_json()}, f)
 
                 self.negative_lit[L_a_tree_str]=a_index
+
+            L_ori_ids.append(self.negative_lit[L_a_tree_str])
             self.negative_lit_count[L_a_tree_str] += 1
 
         #update all pair count
@@ -591,6 +609,7 @@ class Dataset:
                 print(L_a_tree_str)
                 print(L_a_tree_str in L_ori_trees_str)
             L_inducted_trees_str.append(L_a_tree_str)
+            L_inducted_ids.append(self.negative_lit[L_a_tree_str])
 
         if self.small_test:
             print("L_ori_trees")
@@ -610,7 +629,8 @@ class Dataset:
 
                     self.negative_X[(ori_lit_global_idx, inducted_lit_global_idx)]+=1
 
-
+        #save the ori_ids and lemma_ids
+        self.rnn_dps.append({"timestamp": len(self.rnn_dps), "ori": L_ori_ids, "inducted": L_inducted_ids})
 
     def add_dp_to_positive_X(self, inducted_cube, folder):
         """
@@ -719,12 +739,13 @@ class Dataset:
         P_negative_matrix = np.zeros((len(self.negative_lit), len(self.negative_lit)))
         for i in range(len(self.negative_lit)):
             for j in range(len(self.negative_lit)):
-                if negative_X_matrix[i][j]==0:
-                    P_negative_matrix[i][j]=0
-                elif all_pair_matrix[i][j]<MIN_COUNT:
-                    P_negative_matrix[i][j]=0
+                if all_pair_matrix[i][j]<MIN_COUNT:
+                    P_negative_matrix[i][j]=-1
                 else:
                     P_negative_matrix[i][j] = negative_X_matrix[i][j]/all_pair_matrix[i][j]
+                    self.logger.debug("P:{}".format(P_negative_matrix[i][j]))
+                    self.logger.debug(negative_X_matrix[i][j])
+                    self.logger.debug(all_pair_matrix[i][j])
         # P_negative_matrix = np.divide(negative_X_matrix, all_pair_matrix)
         with open(os.path.join(folder, "positive_X_" + str(self.X_counter).zfill(5)+ ".json"), "w") as f:
             json.dump({"X": positive_X_matrix.tolist(), "X_raw": remap_keys(self.positive_X)}, f)
@@ -734,6 +755,9 @@ class Dataset:
             json.dump({"X": all_pair_matrix.tolist()}, f)
         with open(os.path.join(folder, "P_negative_X_matrix_" + str(self.X_counter).zfill(5)+ ".json"), "w") as f:
             json.dump({"X": P_negative_matrix.tolist()}, f)
+
+        with open(os.path.join(folder, "RNN_datapoints_" + str(self.X_counter).zfill(5)+ ".json"), "w") as f:
+            json.dump({"RNN_datapoints": self.rnn_dps}, f)
 
 
 
