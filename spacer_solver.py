@@ -520,7 +520,7 @@ if __name__ == '__main__':
         sys.exit("No seed file")
     if os.path.isdir(args.input):
         if args.gen_dataset:
-            dataset = DPu.Dataset(folder = args.input, html_vis_page = os.path.join(args.input, "ind_gen_vis.html"), small_test = (limit<=10))
+            dataset = DPu.Dataset(folder = args.input, html_vis_page = os.path.join(args.input, "ind_gen_vis.html"), small_test = (limit<=10), log_lvl = args.logLevel)
         if args.skip_indgen:
             skip_ind_gen_folder(seed_file, args.input, args.vis, dataset = dataset, limit = limit)
         else:
