@@ -630,7 +630,12 @@ class Dataset:
                     self.negative_X[(ori_lit_global_idx, inducted_lit_global_idx)]+=1
 
         #save the ori_ids and lemma_ids
-        self.rnn_dps.append({"timestamp": len(self.rnn_dps), "ori": L_ori_ids, "inducted": L_inducted_ids})
+        mask = [0]*len(L_ori_ids)
+
+        for i in range(len(L_ori_ids)):
+            if L_ori_ids[i] in L_inducted_ids:
+                mask[i] = 1
+        self.rnn_dps.append({"timestamp": len(self.rnn_dps), "ori": L_ori_ids, "inducted": L_inducted_ids, "mask": mask})
 
     def add_dp_to_positive_X(self, inducted_cube, folder):
         """
