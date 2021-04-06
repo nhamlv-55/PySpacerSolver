@@ -12,6 +12,7 @@ import Doping.PySpacerSolver.utils as DPu
 from Doping.utils.utils import get_seed_file
 import traceback
 import sys
+import re
 
 class SpacerSolverProxyDb(object):
     def __init__(self, proxies_db):
@@ -451,7 +452,11 @@ def skip_ind_gen_folder(seed_file, folder, vis, dataset, limit, explicit_negativ
     #put all the vars into the vocab
     seed_expr_db = ExprDb(seed_file)
     seed_vars = seed_expr_db.get_vars()
-    seed_vars = sorted(seed_vars)
+
+    #only get vars of the form state_X_n
+    seed_vars = [v for v in seed_vars if re.match(r"state_[0-9]*_n", v)]
+    #sort vars
+    seed_vars = sorted(seed_vars, key =lambda v: int(v.split("_")[1]))
 
     for v in seed_vars:
         dataset.vocab.add_token(v)
