@@ -13,6 +13,7 @@ from matplotlib.pyplot import figure
 from collections import defaultdict
 import logging
 import traceback
+import re
 CONST_EMB_SIZE = 6
 MIN_COUNT = 1
 
@@ -137,6 +138,7 @@ class Vocab:
         self.s2id = {}
         self.sort_size = 0
 
+        self.w_count = {}
         #add constant
         for t in "<ROOT> <UNK> <NUMBER> + - * / <= >= = not".split():
             self.add_token(t)
@@ -148,12 +150,14 @@ class Vocab:
     def add_token(self, w):
         '''add a token to vocab and return its id'''
         if w in self.w2id:
+            self.w_count[self.w2id[w]]+=1
             return self.w2id[w]
         else:
             idx = self.size
             self.w2id[w] = idx
             self.id2w[idx] = w
             self.size+=1
+            self.w_count[idx]=1
             return self.w2id[w]
 
     def add_sort(self, sort):
@@ -176,7 +180,8 @@ class Vocab:
                  "size": self.size,
                  "id2s": self.id2s, "s2id": self.s2id,
                  "sort_size": self.sort_size,
-                 "const_emb_size": self.const_emb_size}
+                 "const_emb_size": self.const_emb_size,
+                 "w_count": self.w_count}
         with open(filename, "w") as f:
             json.dump(vocab, f)
 
@@ -198,6 +203,11 @@ class Node:
         self._token = ""
         self._token_id = -1
         self._sort_id = -1
+        """
+        _var_pos:
+        if the token is like state_1_n, the pos is 1. If it is not a var, use -1 (would be the last one in the positional encoding buffer)
+        """
+        self._var_pos = -1
         self._children = list()
         self._sort = None
         self._const_emb = [0]*const_emb_size
@@ -260,6 +270,13 @@ class Node:
         except:
             traceback.print_exc()
             print(ast_node, ast_node.sort(), type(ast_node))
+
+    def set_var_pos(self, ast_node):
+        token = ast_node.decl().name()
+        if re.match(r"[a-zA-Z0-9]*_[0-9]*_n", token):
+            parts = token.split("_")
+            self._var_pos = int(parts[1])
+    
     def set_node_idx(self, idx):
         self._node_idx = idx
 
@@ -288,9 +305,9 @@ class Node:
 
     def to_json(self):
         if self._num_child==0:
-            return {"token": self._token, "token_id": self._token_id, "sort": self._sort, "sort_id": self._sort_id, "children": [], "expr": self._raw_expr, "features": self.get_feat()}
+            return {"token": self._token, "token_id": self._token_id, "sort": self._sort, "sort_id": self._sort_id, "var_pos": self._var_pos, "children": [], "expr": self._raw_expr, "features": self.get_feat()}
         else:
-            return {"token": self._token, "token_id": self._token_id, "sort": self._sort, "sort_id": self._sort_id, "children": [child.to_json() for child in self._children], "expr": self._raw_expr, "features": self.get_feat()}
+            return {"token": self._token, "token_id": self._token_id, "sort": self._sort, "sort_id": self._sort_id, "var_pos": self._var_pos, "children": [child.to_json() for child in self._children], "expr": self._raw_expr, "features": self.get_feat()}
 
     def __str__(self):
         return json.dumps(self.to_json(), indent = 2)
@@ -308,7 +325,7 @@ class Node:
             
 
     def get_feat(self):
-        feat = [self._token_id, self._sort_id]
+        feat = [self._token_id, self._sort_id, self._var_pos]
         feat.extend(self._const_emb)
         return feat
 
@@ -316,6 +333,7 @@ def ast_to_node(ast_node, vocab, local_const_emb):
     node = Node(vocab.const_emb_size)
     node.set_token(ast_node, vocab, local_const_emb)
     node.set_sort(ast_node, vocab)
+    node.set_var_pos(ast_node)
     if ast_node.num_args == 0:
         return node
     else:
