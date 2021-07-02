@@ -174,6 +174,7 @@ class Vocab:
     def dump(self):
         print("ID2W:", self.id2w)
         print("W2ID:", self.w2id)
+        print("w_count", self.w_count)
 
     def save(self, filename):
         vocab = {"id2w": self.id2w, "w2id": self.w2id,
@@ -196,6 +197,10 @@ class Vocab:
         self.s2id = data["s2id"]
         self.sort_size = data["sort_size"]
         self.const_emb_size = data["const_emb_size"]
+        #special treatmeat for w_count
+        self.w_count = {}
+        for k in data["w_count"]:
+            self.w_count[int(k)] = data["w_count"][k]
 
 class Node:
     def __init__(self, const_emb_size):
@@ -396,7 +401,7 @@ def convert_tree_to_tensors(tree, device=torch.device('cuda')):
     }
 
 class Dataset:
-    def __init__(self, checkpoint = 500, const_emb_size = CONST_EMB_SIZE, folder = None, html_vis_page = None, small_test = False, log_lvl = logging.INFO):
+    def __init__(self, checkpoint = 500, const_emb_size = CONST_EMB_SIZE, folder = None, html_vis_page = None, small_test = False, log_lvl = "INFO"):
         self.vocab = Vocab()
         self.dataset = {}
         if html_vis_page is not None:
@@ -788,10 +793,10 @@ class Dataset:
 
         if print_matrix:
             fig, axs = plt.subplots(4, 1, figsize = (20, 20))
-            im = axs[0].imshow(positive_X_matrix, interpolation = None)
+            im = axs[0].imshow(np.log(positive_X_matrix+1), interpolation = None)
             im = axs[1].imshow(positive_X_matrix.astype(bool), interpolation = None)
-            im = axs[2].imshow(negative_X_matrix, interpolation = None)
-            im = axs[3].imshow(negative_X_matrix.astype(bool), interpolation = None)
+            # im = axs[2].imshow(negative_X_matrix, interpolation = None)
+            # im = axs[3].imshow(negative_X_matrix.astype(bool), interpolation = None)
             plt.savefig("XP.svg")
         
 
