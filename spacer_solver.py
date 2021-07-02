@@ -454,7 +454,7 @@ def skip_ind_gen_folder(seed_file, folder, vis, dataset, limit, explicit_negativ
     seed_vars = seed_expr_db.get_vars()
 
     #only get vars of the form state_X_n
-    seed_vars = [v for v in seed_vars if re.match(r"state_[0-9]*_n", v)]
+    seed_vars = [v for v in seed_vars if re.match(r"[A-Za-z]*_[0-9]*_n", v)]
     #sort vars
     seed_vars = sorted(seed_vars, key =lambda v: int(v.split("_")[1]))
 
